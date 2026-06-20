@@ -1,0 +1,8 @@
+[Unit]
+Description=Auto-deploy da App de Despesas (git pull + restart)
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/workspace/code/expense_keeping
+ExecStart=%h/workspace/code/expense_keeping/scripts/deploy.sh

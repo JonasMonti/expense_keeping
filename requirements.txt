@@ -1,0 +1,10 @@
+streamlit>=1.40
+SQLAlchemy>=2.0
+plotly>=5.24
+python-dotenv>=1.0
+
+# --- PostgreSQL (opcional) ---
+# Para usar PostgreSQL em vez de SQLite, instala também o driver:
+#   pip install "psycopg[binary]>=3.2"
+# e define DATABASE_URL no .env, ex.:
+#   DATABASE_URL=postgresql+psycopg://user:password@localhost:5432/expenses
