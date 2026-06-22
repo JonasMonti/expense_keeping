@@ -13,7 +13,23 @@ como PWA). Uso pessoal, single-user.
 - **PWA + deploy:** service worker injetado no Streamlit; systemd + túnel (ver `deploy/INSTALL.md`)
 
 > Nota: este projeto **não** usa React/TypeScript/Tailwind. Se vires referências a isso,
-> estão desatualizadas — a stack é Python/Streamlit.
+> estão desatualizadas — a stack web é Python/Streamlit.
+
+## App nativa (mobile/)
+
+Existe também uma versão **nativa em Flutter** (Android + iOS) na pasta `mobile/`,
+que replica a mesma identidade visual e funcionalidades, mas com **SQLite local no
+dispositivo** (offline, single-user, sem servidor). Ver `mobile/README.md`.
+
+- **Linguagem/Framework:** Dart / Flutter
+- **BD:** sqflite (SQLite no dispositivo)
+- **Gráficos:** fl_chart (donut + linha anual)
+- **Toolchain:** instalada em espaço de utilizador (`~/.flutter-toolchain`, `~/Android/Sdk`);
+  carregar com `source mobile/tool/env.sh` antes de `flutter build apk`.
+- iOS só compila em macOS + Xcode (restrição da Apple).
+
+A versão Streamlit e a versão Flutter partilham o mesmo modelo de dados conceptual
+(Category, Expense) mas têm bases de dados **independentes** — não sincronizam.
 
 ## Estrutura
 

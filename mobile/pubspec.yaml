@@ -1,0 +1,41 @@
+name: despesas
+description: "Gestão de despesas pessoais — app nativa (Flutter)."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  sqflite: ^2.3.3          # SQLite local no dispositivo (offline)
+  path: ^1.9.0
+  intl: ^0.20.2            # formatação pt-PT de datas/números (alinhado com flutter_localizations)
+  fl_chart: ^0.69.0        # gráficos (donut + linha)
+
+dev_dependencies:
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/
+  fonts:
+    - family: Space Grotesk
+      fonts:
+        # Fonte variável (eixo wght 300–700); o Flutter aplica o peso pedido.
+        - asset: assets/fonts/SpaceGrotesk.ttf
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
