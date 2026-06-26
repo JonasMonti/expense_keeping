@@ -7,6 +7,8 @@ import '../charts/donut.dart';
 import '../charts/year_line.dart';
 import '../data/repository.dart';
 import '../models/models.dart';
+import '../voice/voice_capture_sheet.dart';
+import '../voice/voice_intake.dart';
 import 'add_expense_sheet.dart';
 import 'categories_page.dart';
 import 'format.dart';
@@ -48,10 +50,27 @@ class _HomePageState extends State<HomePage> {
     _year = now.year;
     _month = now.month;
     _refresh();
+    // Refrescar quando uma despesa é criada/anulada por voz (deep link ou 🎤).
+    expensesRevision.addListener(_onExpensesChanged);
+  }
+
+  @override
+  void dispose() {
+    expensesRevision.removeListener(_onExpensesChanged);
+    super.dispose();
+  }
+
+  void _onExpensesChanged() {
+    if (mounted) _refresh();
   }
 
   void _refresh() {
     setState(() => _future = _loadData());
+  }
+
+  Future<void> _listenVoice() async {
+    final text = await captureVoice(context);
+    if (text != null) await handleVoiceText(_repo, text);
   }
 
   Future<_DashboardData> _loadData() async {
@@ -87,21 +106,74 @@ class _HomePageState extends State<HomePage> {
     if (changed == true) _refresh();
   }
 
+  Future<void> _editExpense(ExpenseView e) async {
+    final changed = await showAddExpenseSheet(context, _repo, editing: e);
+    if (changed) _refresh();
+  }
+
   Future<void> _deleteExpense(ExpenseView e) async {
     await _repo.deleteExpense(e.id);
     _refresh();
+  }
+
+  /// Pergunta antes de apagar (evita apagar sem querer com um deslize acidental).
+  Future<bool> _confirmDelete(ExpenseView e) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: Text('Apagar despesa?', style: display(18)),
+        content: Text(
+          'Vais apagar ${fmtMoney(e.amount)} · ${e.icon} ${e.category}'
+          '${e.description.isNotEmpty ? ' — ${e.description}' : ''}.\n'
+          'Esta ação não pode ser anulada.',
+          style: const TextStyle(fontFamily: kBody, fontSize: 14, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar',
+                style: TextStyle(fontFamily: kBody, color: AppColors.muted)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Apagar',
+                style: TextStyle(
+                    fontFamily: kBody,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFFB4231F))),
+          ),
+        ],
+      ),
+    );
+    return ok ?? false;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.bg,
-      floatingActionButton: FloatingActionButton(
-        onPressed: _addExpense,
-        backgroundColor: AppColors.accent,
-        foregroundColor: Colors.white,
-        tooltip: 'Nova despesa',
-        child: const Icon(Icons.add, size: 28),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FloatingActionButton.small(
+            heroTag: 'fab_voz',
+            onPressed: _listenVoice,
+            backgroundColor: AppColors.surface,
+            foregroundColor: AppColors.accent,
+            tooltip: 'Registar por voz',
+            child: const Text('🎤', style: TextStyle(fontSize: 20)),
+          ),
+          const SizedBox(height: 12),
+          FloatingActionButton(
+            heroTag: 'fab_add',
+            onPressed: _addExpense,
+            backgroundColor: AppColors.accent,
+            foregroundColor: Colors.white,
+            tooltip: 'Nova despesa',
+            child: const Icon(Icons.add, size: 28),
+          ),
+        ],
       ),
       body: SafeArea(
         child: FutureBuilder<_DashboardData>(
@@ -179,8 +251,13 @@ class _HomePageState extends State<HomePage> {
         color: const Color(0x14B4231F),
         child: const Icon(Icons.delete_outline, color: Color(0xFFB4231F)),
       ),
+      // Pergunta antes de remover; só apaga se confirmar.
+      confirmDismiss: (_) => _confirmDelete(e),
       onDismissed: (_) => _deleteExpense(e),
-      child: ExpenseRow(e),
+      child: InkWell(
+        onTap: () => _editExpense(e),
+        child: ExpenseRow(e),
+      ),
     );
   }
 

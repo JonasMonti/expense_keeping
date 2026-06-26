@@ -6,11 +6,24 @@ import 'package:flutter/services.dart';
 
 import '../data/repository.dart';
 import '../models/models.dart';
+import '../ocr/receipt_scanner.dart';
 import 'format.dart';
 import 'theme.dart';
 
-/// Mostra o sheet e devolve true se foi registada uma despesa.
-Future<bool> showAddExpenseSheet(BuildContext context, Repository repo) async {
+/// Mostra o sheet e devolve true se foi registada/alterada uma despesa.
+///
+/// Os parâmetros `initial*` permitem abrir o formulário já preenchido (ex.:
+/// quando o registo por voz percebeu a categoria/descrição mas não o valor).
+/// Passar [editing] abre o sheet em modo edição: prefill com os valores da
+/// despesa e gravação por `updateExpense`.
+Future<bool> showAddExpenseSheet(
+  BuildContext context,
+  Repository repo, {
+  double? initialAmount,
+  Category? initialCategory,
+  String? initialDescription,
+  ExpenseView? editing,
+}) async {
   final cats = await repo.listCategories();
   if (!context.mounted) return false;
   if (cats.isEmpty) {
@@ -25,7 +38,14 @@ Future<bool> showAddExpenseSheet(BuildContext context, Repository repo) async {
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
     ),
-    builder: (_) => _AddExpenseForm(repo: repo, categories: cats),
+    builder: (_) => _AddExpenseForm(
+      repo: repo,
+      categories: cats,
+      initialAmount: initialAmount,
+      initialCategory: initialCategory,
+      initialDescription: initialDescription,
+      editing: editing,
+    ),
   );
   return result ?? false;
 }
@@ -33,18 +53,55 @@ Future<bool> showAddExpenseSheet(BuildContext context, Repository repo) async {
 class _AddExpenseForm extends StatefulWidget {
   final Repository repo;
   final List<Category> categories;
-  const _AddExpenseForm({required this.repo, required this.categories});
+  final double? initialAmount;
+  final Category? initialCategory;
+  final String? initialDescription;
+  final ExpenseView? editing;
+  const _AddExpenseForm({
+    required this.repo,
+    required this.categories,
+    this.initialAmount,
+    this.initialCategory,
+    this.initialDescription,
+    this.editing,
+  });
 
   @override
   State<_AddExpenseForm> createState() => _AddExpenseFormState();
 }
 
 class _AddExpenseFormState extends State<_AddExpenseForm> {
-  final _amountCtrl = TextEditingController();
-  final _descCtrl = TextEditingController();
-  late Category _category = widget.categories.first;
+  late final TextEditingController _amountCtrl;
+  late final TextEditingController _descCtrl;
+  late Category _category;
   DateTime _date = _today();
   String? _error;
+
+  bool get _isEditing => widget.editing != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final ed = widget.editing;
+    final amount = ed?.amount ?? widget.initialAmount;
+    _amountCtrl = TextEditingController(
+      text: amount != null
+          ? amount.toStringAsFixed(2).replaceAll('.', ',')
+          : '',
+    );
+    _descCtrl = TextEditingController(
+        text: ed?.description ?? widget.initialDescription ?? '');
+    if (ed != null) _date = DateTime(ed.spentOn.year, ed.spentOn.month, ed.spentOn.day);
+    // A categoria inicial pode vir de outra lista (ou da despesa em edição);
+    // faz match pela id para garantir que é a mesma instância dos itens do dropdown.
+    final wantedId = ed?.categoryId ?? widget.initialCategory?.id;
+    _category = wantedId == null
+        ? widget.categories.first
+        : widget.categories.firstWhere(
+            (c) => c.id == wantedId,
+            orElse: () => widget.categories.first,
+          );
+  }
 
   static DateTime _today() {
     final n = DateTime.now();
@@ -69,13 +126,36 @@ class _AddExpenseFormState extends State<_AddExpenseForm> {
       setState(() => _error = 'O valor tem de ser maior que zero.');
       return;
     }
-    await widget.repo.addExpense(Expense(
+    final e = Expense(
+      id: widget.editing?.id,
       amount: double.parse(valor.toStringAsFixed(2)),
       categoryId: _category.id!,
       spentOn: _date,
       description: _descCtrl.text.trim(),
-    ));
+    );
+    if (_isEditing) {
+      await widget.repo.updateExpense(e);
+    } else {
+      await widget.repo.addExpense(e);
+    }
     if (mounted) Navigator.of(context).pop(true);
+  }
+
+  /// Lê uma fatura com a câmara/galeria e preenche valor e descrição.
+  Future<void> _scanReceipt() async {
+    final parsed = await scanReceipt(context);
+    if (parsed == null || !mounted) return;
+    setState(() {
+      if (parsed.amount != null) {
+        _amountCtrl.text =
+            parsed.amount!.toStringAsFixed(2).replaceAll('.', ',');
+      }
+      // Só sugere a descrição se o campo ainda estiver vazio.
+      if (_descCtrl.text.trim().isEmpty && parsed.description.isNotEmpty) {
+        _descCtrl.text = parsed.description;
+      }
+      _error = null;
+    });
   }
 
   Future<void> _pickDate() async {
@@ -109,7 +189,25 @@ class _AddExpenseFormState extends State<_AddExpenseForm> {
               ),
             ),
           ),
-          Text('Registar despesa', style: display(20)),
+          Row(
+            children: [
+              Expanded(
+                child: Text(_isEditing ? 'Editar despesa' : 'Registar despesa',
+                    style: display(20)),
+              ),
+              if (!_isEditing)
+                TextButton.icon(
+                  onPressed: _scanReceipt,
+                  icon: const Text('📷', style: TextStyle(fontSize: 16)),
+                  label: const Text('Ler fatura',
+                      style: TextStyle(
+                          fontFamily: kBody,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600)),
+                  style: TextButton.styleFrom(foregroundColor: AppColors.accent),
+                ),
+            ],
+          ),
           const SizedBox(height: 18),
           TextField(
             controller: _amountCtrl,
@@ -180,8 +278,8 @@ class _AddExpenseFormState extends State<_AddExpenseForm> {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
               ),
-              child: const Text('💾  Guardar',
-                  style: TextStyle(
+              child: Text(_isEditing ? '💾  Guardar alterações' : '💾  Guardar',
+                  style: const TextStyle(
                       fontFamily: kBody,
                       fontWeight: FontWeight.w600,
                       fontSize: 15)),

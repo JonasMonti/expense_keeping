@@ -4,6 +4,25 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>pt.despesas.despesas</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>despesas</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Para registar despesas por voz com o botão de microfone.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Para transcrever o que dizes e criar a despesa automaticamente.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Para tirar foto a uma fatura e preencher a despesa automaticamente.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Para escolher a foto de uma fatura e preencher a despesa automaticamente.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

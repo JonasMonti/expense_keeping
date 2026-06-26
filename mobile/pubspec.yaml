@@ -16,8 +16,14 @@ dependencies:
   path: ^1.9.0
   intl: ^0.20.2            # formatação pt-PT de datas/números (alinhado com flutter_localizations)
   fl_chart: ^0.69.0        # gráficos (donut + linha)
+  app_links: ^7.2.0       # deep links (Siri/Google → despesas://add)
+  speech_to_text: ^7.4.0  # reconhecimento de voz (botão 🎤)
+  image_picker: ^1.1.2    # tirar foto / escolher imagem da fatura
+  google_mlkit_text_recognition: ^0.15.0  # OCR no dispositivo (offline, ler faturas)
 
 dev_dependencies:
+  flutter_test:
+    sdk: flutter
   flutter_lints: ^4.0.0
 
 flutter:

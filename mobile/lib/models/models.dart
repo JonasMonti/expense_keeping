@@ -68,6 +68,7 @@ class ExpenseView {
   final DateTime spentOn;
   final double amount;
   final String description;
+  final int categoryId;
   final String category;
   final String color;
   final String icon;
@@ -77,6 +78,7 @@ class ExpenseView {
     required this.spentOn,
     required this.amount,
     required this.description,
+    required this.categoryId,
     required this.category,
     required this.color,
     required this.icon,
@@ -87,9 +89,19 @@ class ExpenseView {
         spentOn: DateTime.parse(m['spent_on'] as String),
         amount: (m['amount'] as num).toDouble(),
         description: (m['description'] as String?) ?? '',
+        categoryId: m['category_id'] as int,
         category: m['category'] as String,
         color: m['color'] as String,
         icon: m['icon'] as String,
+      );
+
+  /// Converte para [Expense] (para gravar alterações na edição).
+  Expense toExpense() => Expense(
+        id: id,
+        amount: amount,
+        description: description,
+        spentOn: spentOn,
+        categoryId: categoryId,
       );
 }
 

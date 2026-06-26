@@ -61,9 +61,26 @@ class Repository {
   // ------------------------------------------------------------------ //
   // Despesas
   // ------------------------------------------------------------------ //
-  Future<void> addExpense(Expense e) async {
+  /// Insere a despesa e devolve o id gerado (útil para "Anular").
+  Future<int> addExpense(Expense e) async {
     final d = await _db;
-    await d.insert('expenses', e.toMap());
+    return d.insert('expenses', e.toMap());
+  }
+
+  /// Atualiza uma despesa existente (requer e.id != null).
+  Future<void> updateExpense(Expense e) async {
+    final d = await _db;
+    await d.update(
+      'expenses',
+      {
+        'amount': e.amount,
+        'description': e.description,
+        'spent_on': e.toMap()['spent_on'],
+        'category_id': e.categoryId,
+      },
+      where: 'id = ?',
+      whereArgs: [e.id],
+    );
   }
 
   Future<void> deleteExpense(int id) async {
@@ -74,7 +91,7 @@ class Repository {
   Future<List<ExpenseView>> listExpenses(int year, int month) async {
     final d = await _db;
     final rows = await d.rawQuery('''
-      SELECT e.id, e.spent_on, e.amount, e.description,
+      SELECT e.id, e.spent_on, e.amount, e.description, e.category_id,
              c.name AS category, c.color, c.icon
       FROM expenses e
       JOIN categories c ON c.id = e.category_id
