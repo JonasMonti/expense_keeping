@@ -22,6 +22,7 @@ Future<bool> showAddExpenseSheet(
   double? initialAmount,
   Category? initialCategory,
   String? initialDescription,
+  DateTime? initialDate,
   ExpenseView? editing,
 }) async {
   final cats = await repo.listCategories();
@@ -44,6 +45,7 @@ Future<bool> showAddExpenseSheet(
       initialAmount: initialAmount,
       initialCategory: initialCategory,
       initialDescription: initialDescription,
+      initialDate: initialDate,
       editing: editing,
     ),
   );
@@ -56,6 +58,7 @@ class _AddExpenseForm extends StatefulWidget {
   final double? initialAmount;
   final Category? initialCategory;
   final String? initialDescription;
+  final DateTime? initialDate;
   final ExpenseView? editing;
   const _AddExpenseForm({
     required this.repo,
@@ -63,6 +66,7 @@ class _AddExpenseForm extends StatefulWidget {
     this.initialAmount,
     this.initialCategory,
     this.initialDescription,
+    this.initialDate,
     this.editing,
   });
 
@@ -91,7 +95,10 @@ class _AddExpenseFormState extends State<_AddExpenseForm> {
     );
     _descCtrl = TextEditingController(
         text: ed?.description ?? widget.initialDescription ?? '');
-    if (ed != null) _date = DateTime(ed.spentOn.year, ed.spentOn.month, ed.spentOn.day);
+    final initialDate = ed?.spentOn ?? widget.initialDate;
+    if (initialDate != null) {
+      _date = DateTime(initialDate.year, initialDate.month, initialDate.day);
+    }
     // A categoria inicial pode vir de outra lista (ou da despesa em edição);
     // faz match pela id para garantir que é a mesma instância dos itens do dropdown.
     final wantedId = ed?.categoryId ?? widget.initialCategory?.id;

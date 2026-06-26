@@ -22,30 +22,148 @@ class ParsedExpense {
   final bool categoryMatched;
   final String description;
 
+  /// Data reconhecida na frase ("ontem", "dia 5"…); null se nada foi dito
+  /// (nesse caso quem usa assume hoje).
+  final DateTime? date;
+
   const ParsedExpense({
     this.amount,
     this.category,
     this.categoryMatched = false,
     this.description = '',
+    this.date,
   });
 }
 
 class ExpenseParser {
-  static ParsedExpense parse(String input, List<Category> categories) {
+  static ParsedExpense parse(String input, List<Category> categories,
+      {DateTime? now}) {
     final text = input.trim();
-    final lower = text.toLowerCase();
+
+    // A data é reconhecida primeiro e removida da frase, para a expressão de
+    // data não poluir o valor (ex.: "há 3 dias") nem a descrição.
+    final base = _dateOnly(now ?? DateTime.now());
+    final date = parseDate(text, base);
+    final clean = _stripDatePhrases(text);
+    final lower = clean.toLowerCase();
 
     final amount = _parseAmount(lower);
     final cat = _matchCategory(lower, categories);
-    final description = _extractDescription(text, cat.matchedName);
+    final description = _extractDescription(clean, cat.matchedName);
 
     return ParsedExpense(
       amount: amount,
       category: cat.category,
       categoryMatched: cat.matched,
       description: description,
+      date: date,
     );
   }
+
+  // ------------------------------------------------------------------ //
+  // Data ("hoje", "ontem", "anteontem", "há N dias", "dia N [de mês]",
+  // dias da semana). Devolve só a data (sem hora) ou null.
+  // ------------------------------------------------------------------ //
+  static DateTime? parseDate(String input, DateTime base) {
+    final norm = _stripAccents(input.toLowerCase());
+
+    if (RegExp(r'\banteontem\b').hasMatch(norm)) {
+      return _dateOnly(base.subtract(const Duration(days: 2)));
+    }
+    if (RegExp(r'\bontem\b').hasMatch(norm)) {
+      return _dateOnly(base.subtract(const Duration(days: 1)));
+    }
+    if (RegExp(r'\bhoje\b').hasMatch(norm)) return _dateOnly(base);
+    if (RegExp(r'\bamanha\b').hasMatch(norm)) {
+      return _dateOnly(base.add(const Duration(days: 1)));
+    }
+
+    // "há N dias"
+    final hd = RegExp(r'\bha\s+(\d+)\s+dias?\b').firstMatch(norm);
+    if (hd != null) {
+      return _dateOnly(base.subtract(Duration(days: int.parse(hd.group(1)!))));
+    }
+    // "há N semanas" / "há uma semana" / "semana passada"
+    final hw = RegExp(r'\bha\s+(\d+)\s+semanas?\b').firstMatch(norm);
+    if (hw != null) {
+      return _dateOnly(
+          base.subtract(Duration(days: 7 * int.parse(hw.group(1)!))));
+    }
+    if (RegExp(r'\bha\s+uma\s+semana\b').hasMatch(norm) ||
+        RegExp(r'\bsemana\s+passada\b').hasMatch(norm)) {
+      return _dateOnly(base.subtract(const Duration(days: 7)));
+    }
+
+    // "dia N" (opcionalmente "de <mês>")
+    final dm = RegExp(r'\bdia\s+(\d{1,2})(?:\s+de\s+([a-z]+))?\b').firstMatch(norm);
+    if (dm != null) {
+      final day = int.parse(dm.group(1)!);
+      if (day >= 1 && day <= 31) {
+        final mName = dm.group(2);
+        final month = mName != null ? _months[mName] : null;
+        var dt = DateTime(base.year, month ?? base.month, day);
+        // Sem mês indicado e no futuro → mês anterior (DateTime normaliza mês 0).
+        if (month == null && dt.isAfter(base)) {
+          dt = DateTime(base.year, base.month - 1, day);
+        } else if (month != null && dt.isAfter(base)) {
+          dt = DateTime(base.year - 1, month, day);
+        }
+        if (dt.day == day) return _dateOnly(dt);
+      }
+    }
+
+    // Dias da semana → ocorrência mais recente (hoje conta).
+    for (final e in _weekdays.entries) {
+      if (RegExp(r'\b' + e.key + r'\b').hasMatch(norm)) {
+        final back = (base.weekday - e.value) % 7;
+        return _dateOnly(base.subtract(Duration(days: back)));
+      }
+    }
+    return null;
+  }
+
+  /// Remove as expressões de data da frase (para não poluírem valor/descrição).
+  static String _stripDatePhrases(String text) {
+    var s = text;
+    final patterns = <RegExp>[
+      RegExp(r'\banteontem\b', caseSensitive: false, unicode: true),
+      RegExp(r'\bontem\b', caseSensitive: false, unicode: true),
+      RegExp(r'\bhoje\b', caseSensitive: false, unicode: true),
+      RegExp(r'\bamanh[ãa]\b', caseSensitive: false, unicode: true),
+      RegExp(r'\bh[áa]\s+\d+\s+(?:dias?|semanas?)\b',
+          caseSensitive: false, unicode: true),
+      RegExp(r'\bh[áa]\s+uma\s+semana\b', caseSensitive: false, unicode: true),
+      RegExp(r'\bsemana\s+passada\b', caseSensitive: false, unicode: true),
+      RegExp(r'\bdia\s+\d{1,2}(?:\s+de\s+[a-zà-ÿ]+)?\b',
+          caseSensitive: false, unicode: true),
+      RegExp(
+          r'\b(?:segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado|domingo)(?:-feira)?\b',
+          caseSensitive: false,
+          unicode: true),
+    ];
+    for (final p in patterns) {
+      s = s.replaceAll(p, ' ');
+    }
+    return _clean(s);
+  }
+
+  static DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  static const Map<String, int> _weekdays = {
+    'segunda': DateTime.monday,
+    'terca': DateTime.tuesday,
+    'quarta': DateTime.wednesday,
+    'quinta': DateTime.thursday,
+    'sexta': DateTime.friday,
+    'sabado': DateTime.saturday,
+    'domingo': DateTime.sunday,
+  };
+
+  static const Map<String, int> _months = {
+    'janeiro': 1, 'fevereiro': 2, 'marco': 3, 'abril': 4, 'maio': 5,
+    'junho': 6, 'julho': 7, 'agosto': 8, 'setembro': 9, 'outubro': 10,
+    'novembro': 11, 'dezembro': 12,
+  };
 
   // ------------------------------------------------------------------ //
   // Valor

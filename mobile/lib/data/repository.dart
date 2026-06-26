@@ -88,6 +88,22 @@ class Repository {
     await d.delete('expenses', where: 'id = ?', whereArgs: [id]);
   }
 
+  /// A despesa registada mais recentemente (alvo dos comandos de voz
+  /// "apaga/edita a última despesa"). Null se ainda não há despesas.
+  Future<ExpenseView?> lastExpense() async {
+    final d = await _db;
+    final rows = await d.rawQuery('''
+      SELECT e.id, e.spent_on, e.amount, e.description, e.category_id,
+             c.name AS category, c.color, c.icon
+      FROM expenses e
+      JOIN categories c ON c.id = e.category_id
+      ORDER BY e.created_at DESC, e.id DESC
+      LIMIT 1
+    ''');
+    if (rows.isEmpty) return null;
+    return ExpenseView.fromMap(rows.first);
+  }
+
   Future<List<ExpenseView>> listExpenses(int year, int month) async {
     final d = await _db;
     final rows = await d.rawQuery('''

@@ -14,12 +14,16 @@ A app aceita despesas ditadas por voz de duas formas:
 
 ## Como falar
 
-Diz o valor, a categoria e (opcional) a descrição. Exemplos que funcionam:
+A voz faz **tudo**: criar, apagar e editar despesas.
+
+### Criar
+
+Diz o valor, a categoria, (opcional) a descrição e (opcional) a data:
 
 - *"Cria despesa de doze euros e cinquenta em alimentação, descrição almoço com colegas"*
 - *"Gastei 15,90 na categoria transportes, descrição passe mensal"*
-- *"Vinte e cinco euros em saúde"*
-- *"Trinta euros lazer"*
+- *"Gastei vinte e cinco euros em saúde ontem"*
+- *"Trinta euros lazer há 3 dias"*
 
 Regras:
 
@@ -28,9 +32,26 @@ Regras:
 - **Categoria:** diz `categoria <nome>` ou simplesmente o nome (ex.: *"em alimentação"*).
   Maiúsculas e acentos são indiferentes. Se não bater com nenhuma, vai para **Outros**.
 - **Descrição:** diz `descrição <texto>` (ou `descrição é <texto>`). É opcional.
-- A **data** é sempre hoje.
+- **Data:** opcional, por defeito é hoje. Reconhece `hoje`, `ontem`, `anteontem`,
+  `há N dias`, `há uma semana`, `dia N` (ex.: *"dia 5"*), `dia N de <mês>` e os
+  dias da semana (*"na quarta"* → a quarta mais recente).
 
-Depois de criar, aparece uma faixa **"Anular"** durante alguns segundos, caso a
+### Apagar
+
+Atua sempre sobre a **última despesa registada**:
+
+- *"Apaga a última despesa"* · *"Cancela isso"* · *"Anula a última"*
+
+### Editar
+
+Também sobre a **última despesa**. Diz o que queres mudar:
+
+- *"Muda o valor da última para 20 euros"*
+- *"Muda a categoria da última para transportes"*
+- *"Muda a data da última para ontem"*
+- *"Edita a última despesa"* (sem indicar o quê → abre o formulário preenchido)
+
+Em todos os casos aparece uma faixa **"Anular"** durante alguns segundos, caso a
 transcrição tenha saído errada.
 
 ---

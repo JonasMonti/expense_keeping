@@ -61,7 +61,7 @@ class _VoiceCaptureSheetState extends State<_VoiceCaptureSheet> {
     if (!mounted) return;
     setState(() {
       _listening = true;
-      _status = 'A ouvir… diz a despesa';
+      _status = 'A ouvir… diz a despesa ou um comando';
     });
     await _speech.listen(
       onResult: (r) {
@@ -124,7 +124,9 @@ class _VoiceCaptureSheetState extends State<_VoiceCaptureSheet> {
                   fontFamily: kBody, fontSize: 14, color: AppColors.muted)),
           const SizedBox(height: 8),
           Text(
-            _words.isEmpty ? '“doze euros e cinquenta em alimentação”' : _words,
+            _words.isEmpty
+                ? '“gastei 12,50 em almoço ontem”\n“apaga a última despesa”'
+                : _words,
             textAlign: TextAlign.center,
             style: TextStyle(
               fontFamily: kBody,
