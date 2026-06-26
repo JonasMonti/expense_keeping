@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="pt">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Despesas · Instalar a app</title>
+  <meta name="description" content="Descarrega a app Despesas para Android.">
+  <meta name="theme-color" content="#0F7B66">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #F4F6F4;
+      --surface: #FFFFFF;
+      --border: #E7EAE7;
+      --ink: #16201C;
+      --muted: #6E7872;
+      --faint: #9AA39D;
+      --accent: #0F7B66;
+      --accent-ink: #0A5848;
+      --accent-soft: #E7F2EE;
+      --display: "Space Grotesk", system-ui, sans-serif;
+      --body: "Inter", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      font-family: var(--body);
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+      padding: 24px 18px 48px;
+      display: flex;
+      justify-content: center;
+    }
+    .wrap { width: 100%; max-width: 460px; }
+
+    /* Cabeçalho com a marca */
+    header {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 28px;
+    }
+    .mark {
+      width: 34px; height: 34px; border-radius: 9px;
+      background: var(--accent); color: #fff;
+      display: grid; place-items: center;
+      font-family: var(--display); font-weight: 600; font-size: 17px;
+    }
+    .brand { font-family: var(--display); font-weight: 600; font-size: 20px; letter-spacing: -0.2px; }
+
+    /* Cartão genérico (igual à estética da app) */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 24px;
+      box-shadow: 0 10px 30px rgba(20,32,28,0.04), 0 1px 2px rgba(20,32,28,0.03);
+    }
+    .card + .card { margin-top: 16px; }
+
+    .eyebrow {
+      text-transform: uppercase; font-size: 11.5px; font-weight: 600;
+      letter-spacing: 0.9px; color: var(--faint); margin-bottom: 10px;
+    }
+    h1 {
+      font-family: var(--display); font-weight: 600; font-size: 27px;
+      letter-spacing: -0.4px; line-height: 1.18; margin-bottom: 8px;
+    }
+    .lead { color: var(--muted); font-size: 15px; }
+
+    /* Botão de download */
+    .download {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      width: 100%; margin-top: 20px;
+      background: var(--accent); color: #fff;
+      font-family: var(--body); font-weight: 600; font-size: 16px;
+      text-decoration: none;
+      padding: 16px 18px; border-radius: 13px;
+      transition: background .15s ease, transform .05s ease;
+    }
+    .download:hover { background: var(--accent-ink); }
+    .download:active { transform: scale(.99); }
+    .meta {
+      margin-top: 12px; text-align: center;
+      font-size: 12.5px; color: var(--faint);
+    }
+
+    /* QR */
+    .qr-card { text-align: center; }
+    .qr-box {
+      display: inline-block; margin-top: 14px; padding: 14px;
+      background: #fff; border: 1px solid var(--border); border-radius: 14px;
+    }
+    .qr-box img { display: block; width: 168px; height: 168px; }
+
+    /* Instruções */
+    ol.steps { list-style: none; counter-reset: s; margin-top: 6px; }
+    ol.steps li {
+      counter-increment: s; position: relative;
+      padding: 8px 0 8px 38px; font-size: 14.5px; color: var(--ink);
+      border-bottom: 1px solid var(--border);
+    }
+    ol.steps li:last-child { border-bottom: 0; }
+    ol.steps li::before {
+      content: counter(s);
+      position: absolute; left: 0; top: 8px;
+      width: 24px; height: 24px; border-radius: 7px;
+      background: var(--accent-soft); color: var(--accent-ink);
+      font-family: var(--display); font-weight: 600; font-size: 13px;
+      display: grid; place-items: center;
+    }
+    ol.steps li span { color: var(--muted); }
+
+    .note {
+      display: flex; gap: 8px; align-items: flex-start;
+      font-size: 13px; color: var(--muted);
+    }
+    .note strong { color: var(--ink); font-weight: 600; }
+
+    footer {
+      margin-top: 28px; text-align: center;
+      font-size: 12px; color: var(--faint);
+    }
+    footer a { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="mark">€</div>
+      <div class="brand">Despesas</div>
+    </header>
+
+    <!-- Download -->
+    <section class="card">
+      <div class="eyebrow">App Android</div>
+      <h1>Instala a app Despesas no telemóvel</h1>
+      <p class="lead">Regista e analisa os teus gastos — offline, sem servidor, só no teu dispositivo.</p>
+      <a class="download" href="https://github.com/JonasMonti/expense_keeping/releases/latest/download/app-release.apk" download>
+        ⬇️&nbsp; Descarregar APK
+      </a>
+      <p class="meta">Última versão · <a href="https://github.com/JonasMonti/expense_keeping/releases/latest" style="color:inherit">ver histórico de versões</a></p>
+    </section>
+
+    <!-- QR -->
+    <section class="card qr-card">
+      <div class="eyebrow">No telemóvel</div>
+      <p class="lead">Aponta a câmara para o código e descarrega diretamente.</p>
+      <div class="qr-box">
+        <img src="qr.svg" alt="QR code para descarregar a app">
+      </div>
+    </section>
+
+    <!-- Instruções -->
+    <section class="card">
+      <div class="eyebrow">Como instalar</div>
+      <ol class="steps">
+        <li>Descarrega o <strong>APK</strong> para o telemóvel.<span></span></li>
+        <li>Abre o ficheiro. O Android vai pedir para <span>permitir instalação de fontes desconhecidas</span> — autoriza.</li>
+        <li>Confirma a instalação e abre a app. <span>Pronto. 🎉</span></li>
+      </ol>
+      <div style="height:14px"></div>
+      <p class="note">
+        <span>🍏</span>
+        <span><strong>iPhone:</strong> a Apple não permite instalar por download direto. A app Android é a que se distribui por aqui.</span>
+      </p>
+    </section>
+
+    <footer>
+      Despesas · pessoal, single-user, offline ·
+      <a href="https://github.com/JonasMonti/expense_keeping">código no GitHub</a>
+    </footer>
+  </div>
+</body>
+</html>
