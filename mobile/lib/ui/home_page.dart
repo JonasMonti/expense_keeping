@@ -183,19 +183,63 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         ],
       ),
       body: SafeArea(
-        child: FutureBuilder<_DashboardData>(
-          future: _future,
-          builder: (context, snap) {
-            if (!snap.hasData) {
-              return const Center(
-                  child: CircularProgressIndicator(color: AppColors.accent));
+        child: Stack(
+          children: [
+            FutureBuilder<_DashboardData>(
+              future: _future,
+              builder: (context, snap) {
+                if (!snap.hasData) {
+                  return const Center(
+                      child:
+                          CircularProgressIndicator(color: AppColors.accent));
+                }
+                return RefreshIndicator(
+                  color: AppColors.accent,
+                  onRefresh: () async => _refresh(),
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+                    children: _buildContent(snap.data!),
+                  ),
+                );
+              },
+            ),
+            _voiceEcho(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Eco "🎤 …" do que o micro ouviu — flutua por cima dos botões (sem os
+  /// deslocar) e desaparece sozinho quando ficas em silêncio (ver [VoiceListener]).
+  Widget _voiceEcho() {
+    return Positioned(
+      right: 16,
+      bottom: 132,
+      child: IgnorePointer(
+        child: ListenableBuilder(
+          listenable: _voice,
+          builder: (context, _) {
+            final heard = _voice.lastHeard.trim();
+            if (!_voice.enabled || heard.isEmpty) {
+              return const SizedBox.shrink();
             }
-            return RefreshIndicator(
-              color: AppColors.accent,
-              onRefresh: () async => _refresh(),
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-                children: _buildContent(snap.data!),
+            return ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 220),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '🎤 $heard',
+                  textAlign: TextAlign.end,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, color: AppColors.faint),
+                ),
               ),
             );
           },
@@ -281,48 +325,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         }
         final on = _voice.enabled;
         final listening = on && _voice.status == VoiceStatus.listening;
-        final heard = _voice.lastHeard.trim();
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Eco do que foi reconhecido — confirma que o micro ouve mesmo
-            // (e ajuda a diagnosticar quando um comando não é entendido).
-            if (on && heard.isNotEmpty)
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 220),
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 6),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '🎤 $heard',
-                    textAlign: TextAlign.end,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 12, color: AppColors.faint),
-                  ),
-                ),
-              ),
-            FloatingActionButton.small(
-              heroTag: 'fab_voz',
-              onPressed: _voice.toggle,
-              backgroundColor: AppColors.surface,
-              foregroundColor: on ? AppColors.accent : AppColors.faint,
-              tooltip: on
-                  ? 'A ouvir · tocar para silenciar'
-                  : 'Voz silenciada · tocar para ativar',
-              child: Icon(
-                on ? (listening ? Icons.mic : Icons.mic_none) : Icons.mic_off,
-                size: 20,
-              ),
-            ),
-          ],
+        return FloatingActionButton.small(
+          heroTag: 'fab_voz',
+          onPressed: _voice.toggle,
+          backgroundColor: AppColors.surface,
+          foregroundColor: on ? AppColors.accent : AppColors.faint,
+          tooltip: on
+              ? 'A ouvir · tocar para silenciar'
+              : 'Voz silenciada · tocar para ativar',
+          child: Icon(
+            on ? (listening ? Icons.mic : Icons.mic_none) : Icons.mic_off,
+            size: 20,
+          ),
         );
       },
     );

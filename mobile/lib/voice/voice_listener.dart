@@ -128,6 +128,9 @@ class VoiceListener with ChangeNotifier {
     _sessionActive = true;
     _pending = '';
     _handled = false;
+    // Limpa o eco do que foi ouvido: quando ficas em silêncio, a sessão seguinte
+    // arranca limpa e o texto desaparece (em vez de ficar colado no ecrã).
+    lastHeard = '';
     _set(VoiceStatus.listening);
     await _speech.listen(
       onResult: (r) {
