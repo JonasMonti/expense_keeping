@@ -281,18 +281,48 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         }
         final on = _voice.enabled;
         final listening = on && _voice.status == VoiceStatus.listening;
-        return FloatingActionButton.small(
-          heroTag: 'fab_voz',
-          onPressed: _voice.toggle,
-          backgroundColor: AppColors.surface,
-          foregroundColor: on ? AppColors.accent : AppColors.faint,
-          tooltip: on
-              ? 'A ouvir (diz "despesas…") · tocar para silenciar'
-              : 'Voz silenciada · tocar para ativar',
-          child: Icon(
-            on ? (listening ? Icons.mic : Icons.mic_none) : Icons.mic_off,
-            size: 20,
-          ),
+        final heard = _voice.lastHeard.trim();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Eco do que foi reconhecido — confirma que o micro ouve mesmo
+            // (e ajuda a diagnosticar quando um comando não é entendido).
+            if (on && heard.isNotEmpty)
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 220),
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '🎤 $heard',
+                    textAlign: TextAlign.end,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.faint),
+                  ),
+                ),
+              ),
+            FloatingActionButton.small(
+              heroTag: 'fab_voz',
+              onPressed: _voice.toggle,
+              backgroundColor: AppColors.surface,
+              foregroundColor: on ? AppColors.accent : AppColors.faint,
+              tooltip: on
+                  ? 'A ouvir · tocar para silenciar'
+                  : 'Voz silenciada · tocar para ativar',
+              child: Icon(
+                on ? (listening ? Icons.mic : Icons.mic_none) : Icons.mic_off,
+                size: 20,
+              ),
+            ),
+          ],
         );
       },
     );

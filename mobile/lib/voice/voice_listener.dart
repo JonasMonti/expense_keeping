@@ -1,9 +1,10 @@
 /// Escuta de voz "mãos-livres" enquanto a app está aberta.
 ///
-/// Não há botão para ouvir: ao abrir/retomar a app, escuta logo **um** comando
-/// (sem palavra-chave); depois fica à escuta contínua e só age quando a frase
-/// começa por uma **palavra-chave** ("despesas …"). O utilizador pode silenciar
-/// a qualquer momento (poupar bateria / privacidade) — ver [enabled]/[toggle].
+/// Não há botão nem palavra-chave: a app fica à escuta contínua e, a cada frase,
+/// **só age se ela parecer mesmo um comando** (tem um valor ou um verbo como
+/// "apaga"/"edita") — ver [_looksLikeCommand]. Assim conversa de fundo não cria
+/// despesas. O utilizador pode silenciar a qualquer momento (bateria /
+/// privacidade) — ver [enabled]/[toggle].
 ///
 /// Limite incontornável: nenhuma app pode ouvir antes de ser aberta nem em
 /// segundo plano (iOS proíbe; Android exige serviço dedicado que gasta bateria).
@@ -23,18 +24,27 @@ class VoiceListener with ChangeNotifier {
 
   final stt.SpeechToText _speech = stt.SpeechToText();
 
-  /// Palavras-chave que abrem a escuta contínua (sem acentos, minúsculas).
-  static const List<String> wakeWords = ['despesas', 'despesa'];
-
   bool _initialized = false;
   bool _available = false;
   bool _enabled = true; // o utilizador pode silenciar
   bool _foreground = true;
   bool _sessionActive = false;
-  bool _freeCommand = true; // próxima frase é comando livre (logo após abrir)
+
+  /// Locale efetivo do reconhecedor (o `pt` que existir mesmo no aparelho).
+  /// Null → deixa o motor escolher o do sistema. Forçar um locale inexistente
+  /// (ex.: "pt_PT" num motor que só tem "pt-BR") faz a escuta não transcrever.
+  String? _localeId;
+
+  /// Texto acumulado na sessão atual (parciais incluídos) e flag de despacho,
+  /// para tratar o comando mesmo quando o resultado "final" não chega a disparar.
+  String _pending = '';
+  bool _handled = false;
 
   VoiceStatus status = VoiceStatus.idle;
   String lastHeard = '';
+
+  /// Último erro do motor de voz (diagnóstico; ex.: "error_no_match").
+  String? lastError;
 
   bool get enabled => _enabled;
   bool get available => _available;
@@ -43,19 +53,42 @@ class VoiceListener with ChangeNotifier {
   Future<void> start() async {
     if (!_initialized) {
       _available = await _speech.initialize(
-        onError: (_) => _onSessionEnded(),
+        onError: (e) {
+          lastError = e.errorMsg;
+          _onSessionEnded();
+        },
         onStatus: (s) {
           if (s == 'done' || s == 'notListening') _onSessionEnded();
         },
       );
       _initialized = true;
+      if (_available) await _pickLocale();
     }
     if (!_available) {
       _set(VoiceStatus.unavailable);
       return;
     }
-    _freeCommand = true; // ao (re)começar, o 1.º comando é livre
     _listen();
+  }
+
+  /// Escolhe o melhor locale português disponível no reconhecedor do aparelho:
+  /// prefere pt-PT, aceita qualquer pt-*, e cai no locale do sistema se não houver.
+  Future<void> _pickLocale() async {
+    try {
+      final locales = await _speech.locales();
+      stt.LocaleName? pick;
+      for (final l in locales) {
+        final id = l.localeId.toLowerCase().replaceAll('-', '_');
+        if (id == 'pt_pt') {
+          pick = l;
+          break;
+        }
+        if (id.startsWith('pt')) pick ??= l;
+      }
+      _localeId = pick?.localeId; // null → locale do sistema
+    } catch (_) {
+      _localeId = null;
+    }
   }
 
   /// Ciclo de vida da app: parar em segundo plano, retomar à frente.
@@ -93,19 +126,23 @@ class VoiceListener with ChangeNotifier {
   Future<void> _listen() async {
     if (!_available || !_enabled || !_foreground || _sessionActive) return;
     _sessionActive = true;
+    _pending = '';
+    _handled = false;
     _set(VoiceStatus.listening);
     await _speech.listen(
-      onResult: (r) async {
+      onResult: (r) {
         lastHeard = r.recognizedWords;
-        if (r.finalResult) {
-          await _handle(r.recognizedWords);
+        _pending = r.recognizedWords;
+        if (r.finalResult && !_handled) {
+          _handled = true;
+          _handle(r.recognizedWords);
         } else {
           notifyListeners();
         }
       },
       listenOptions: stt.SpeechListenOptions(
         partialResults: true,
-        localeId: 'pt_PT',
+        localeId: _localeId,
         listenFor: const Duration(seconds: 30),
         pauseFor: const Duration(seconds: 3),
       ),
@@ -114,6 +151,13 @@ class VoiceListener with ChangeNotifier {
 
   void _onSessionEnded() {
     _sessionActive = false;
+    // Em alguns motores Android a sessão acaba (notListening/timeout) sem que o
+    // resultado "final" dispare. Se ouvimos algo e ainda não foi tratado, trata
+    // agora — senão o comando perdia-se em silêncio.
+    if (!_handled && _pending.trim().isNotEmpty) {
+      _handled = true;
+      _handle(_pending);
+    }
     if (!_enabled || !_foreground) {
       _set(_enabled ? VoiceStatus.idle : VoiceStatus.off);
       return;
@@ -126,34 +170,28 @@ class VoiceListener with ChangeNotifier {
     final text = phrase.trim();
     if (text.isEmpty) return;
 
-    String? command;
-    if (_freeCommand) {
-      command = text; // logo após abrir: comando livre, sem palavra-chave
-    } else {
-      command = _stripWake(text); // depois: exige palavra-chave
-    }
-    _freeCommand = false;
+    // Sem palavra-chave: aceita qualquer frase, mas só age se parecer um
+    // comando (tem valor ou verbo). Evita que fala de fundo crie despesas ou
+    // abra o formulário sozinho.
+    if (!_looksLikeCommand(text)) return;
 
-    if (command == null || command.isEmpty) return;
     _set(VoiceStatus.heard);
-    await handleVoiceText(repo, command);
+    await handleVoiceText(repo, text);
   }
 
-  /// Devolve o comando depois da palavra-chave, ou null se não houver.
-  String? _stripWake(String text) {
-    final lower = _stripAccents(text.toLowerCase());
-    for (final w in wakeWords) {
-      final idx = lower.indexOf(w);
-      if (idx >= 0 && idx <= 3) {
-        // palavra-chave no início
-        return text
-            .substring(idx + w.length)
-            .replaceFirst(RegExp(r'^[\s,.:;!?-]+'), '')
-            .trim();
-      }
-    }
-    return null;
-  }
+  /// Heurística leve: a frase parece um comando de despesa?
+  ///   • criar → tem um número (dígito ou por extenso) ou a palavra "euros";
+  ///   • apagar/editar → tem um dos verbos de ação.
+  /// (A interpretação fina fica para o [VoiceCommand]/[ExpenseParser].)
+  static bool _looksLikeCommand(String text) => _commandSignal.hasMatch(
+      _stripAccents(text.toLowerCase()));
+
+  static final RegExp _commandSignal = RegExp(
+      r'\d'
+      r'|\b(euros?|eur)\b'
+      r'|\b(zero|um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze|catorze|quatorze|quinze|dezasseis|dezesseis|dezassete|dezessete|dezoito|dezanove|dezenove|vinte|trinta|quarenta|cinquenta|sessenta|setenta|oitenta|noventa|cem|cento|duzentos|trezentos|quinhentos|mil)\b'
+      r'|\b(apaga|apagar|apague|cancela|cancelar|cancele|anula|anular|anule|elimina|eliminar|elimine|remove|remover)\b'
+      r'|\b(edita|editar|edite|altera|alterar|altere|muda|mudar|mude|corrige|corrigir|atualiza|atualizar|troca|trocar)\b');
 
   void _set(VoiceStatus s) {
     status = s;
