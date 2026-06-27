@@ -105,6 +105,67 @@ class ExpenseView {
       );
 }
 
+/// Regra de despesa recorrente (renda, assinatura, passe…). Gera automaticamente
+/// uma despesa por mês, no dia [dayOfMonth], enquanto estiver [active].
+class Recurring {
+  final int? id;
+  final double amount;
+  final String description;
+  final int categoryId;
+  final int dayOfMonth; // 1..31 (ajustado ao tamanho do mês na geração)
+  final bool active;
+
+  /// Último mês já materializado, no formato 'yyyy-MM' (null = ainda nenhum).
+  final String? lastGenerated;
+
+  const Recurring({
+    this.id,
+    required this.amount,
+    this.description = '',
+    required this.categoryId,
+    required this.dayOfMonth,
+    this.active = true,
+    this.lastGenerated,
+  });
+}
+
+/// Recorrente já com a categoria resolvida (para a lista na UI).
+class RecurringView {
+  final int id;
+  final double amount;
+  final String description;
+  final int categoryId;
+  final int dayOfMonth;
+  final bool active;
+  final String category;
+  final String color;
+  final String icon;
+
+  const RecurringView({
+    required this.id,
+    required this.amount,
+    required this.description,
+    required this.categoryId,
+    required this.dayOfMonth,
+    required this.active,
+    required this.category,
+    required this.color,
+    required this.icon,
+  });
+
+  factory RecurringView.fromMap(Map<String, Object?> m) => RecurringView(
+        id: m['id'] as int,
+        amount: (m['amount'] as num).toDouble(),
+        description: (m['description'] as String?) ?? '',
+        categoryId: m['category_id'] as int,
+        dayOfMonth: m['day_of_month'] as int,
+        active: (m['active'] as int? ?? 1) == 1,
+        category: m['category'] as String,
+        color: m['color'] as String,
+        icon: m['icon'] as String,
+      );
+}
+
 /// Total agregado por categoria (equivalente ao dict de totals_by_category).
 class CategoryTotal {
   final String category;

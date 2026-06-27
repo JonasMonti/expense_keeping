@@ -11,6 +11,7 @@ import '../voice/voice_capture_sheet.dart';
 import '../voice/voice_intake.dart';
 import 'add_expense_sheet.dart';
 import 'categories_page.dart';
+import 'recurring_page.dart';
 import 'format.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -74,6 +75,9 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<_DashboardData> _loadData() async {
+    // Materializa as despesas recorrentes em falta (mês corrente + catch-up).
+    await _repo.generateDueRecurring();
+
     final years = await _repo.availableYears();
     final now = DateTime.now();
     if (!years.contains(now.year)) years.insert(0, now.year);
@@ -104,6 +108,14 @@ class _HomePageState extends State<HomePage> {
       MaterialPageRoute(builder: (_) => CategoriesPage(repo: _repo)),
     );
     if (changed == true) _refresh();
+  }
+
+  Future<void> _openRecurring() async {
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => RecurringPage(repo: _repo)),
+    );
+    // Recriar regras pode gerar despesas novas → refrescar sempre.
+    _refresh();
   }
 
   Future<void> _editExpense(ExpenseView e) async {
@@ -288,6 +300,11 @@ class _HomePageState extends State<HomePage> {
               style: display(20, weight: FontWeight.w600)),
         ),
         _periodButton(),
+        IconButton(
+          icon: const Text('🔁', style: TextStyle(fontSize: 18)),
+          onPressed: _openRecurring,
+          tooltip: 'Despesas recorrentes',
+        ),
         IconButton(
           icon: const Text('🏷️', style: TextStyle(fontSize: 18)),
           onPressed: _openCategories,

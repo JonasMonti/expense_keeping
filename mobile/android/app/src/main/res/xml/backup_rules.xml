@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Regras de Auto Backup (Android ≤ 11, API ≤ 30).
+  Inclui a base de dados SQLite (expenses.db) e as preferências, para que o
+  sistema as copie para o Google Drive do próprio utilizador e as restaure
+  ao reinstalar / mudar de telemóvel. Nenhum servidor nosso está envolvido.
+-->
+<full-backup-content>
+    <include domain="database" path="." />
+    <include domain="sharedpref" path="." />
+</full-backup-content>

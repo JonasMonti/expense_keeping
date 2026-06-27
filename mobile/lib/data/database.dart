@@ -29,13 +29,45 @@ class AppDatabase {
     final path = p.join(dir, 'expenses.db');
     return openDatabase(
       path,
-      version: 1,
+      version: 2,
       onConfigure: (d) => d.execute('PRAGMA foreign_keys = ON'),
-      onCreate: _create,
+      onCreate: createSchema,
+      onUpgrade: upgradeSchema,
     );
   }
 
-  Future<void> _create(Database d, int version) async {
+  /// Cria o esquema completo (versão atual). Público para os testes poderem
+  /// abrir uma BD em memória com o mesmo esquema.
+  static Future<void> createSchema(Database d, int version) async {
+    await _create(d);
+  }
+
+  /// Migrações incrementais. Cada bloco corre quando se sobe a partir de uma
+  /// versão anterior, preservando os dados existentes.
+  static Future<void> upgradeSchema(
+      Database d, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await _createRecurring(d);
+    }
+  }
+
+  /// Tabela de despesas recorrentes (usada por [_create] e por [upgradeSchema]).
+  static Future<void> _createRecurring(Database d) async {
+    await d.execute('''
+      CREATE TABLE recurring (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        amount         REAL NOT NULL,
+        description    TEXT NOT NULL DEFAULT '',
+        category_id    INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+        day_of_month   INTEGER NOT NULL,
+        active         INTEGER NOT NULL DEFAULT 1,
+        last_generated TEXT,
+        created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    ''');
+  }
+
+  static Future<void> _create(Database d) async {
     await d.execute('''
       CREATE TABLE categories (
         id    INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,6 +88,7 @@ class AppDatabase {
     ''');
     await d.execute('CREATE INDEX idx_exp_date ON expenses(spent_on)');
     await d.execute('CREATE INDEX idx_exp_cat ON expenses(category_id)');
+    await _createRecurring(d);
 
     final batch = d.batch();
     for (final (name, color, icon) in defaultCategories) {
