@@ -13,7 +13,7 @@ library;
 import '../models/models.dart';
 import 'expense_parser.dart';
 
-enum VoiceIntent { create, delete, edit }
+enum VoiceIntent { create, createRecurring, delete, edit }
 
 class VoiceCommand {
   final VoiceIntent intent;
@@ -27,6 +27,9 @@ class VoiceCommand {
   final DateTime? newDate;
   final String? newDescription;
 
+  /// Dia do mês quando [intent] é [VoiceIntent.createRecurring] (null = hoje).
+  final int? recurringDay;
+
   const VoiceCommand._({
     required this.intent,
     this.create,
@@ -34,6 +37,7 @@ class VoiceCommand {
     this.newCategory,
     this.newDate,
     this.newDescription,
+    this.recurringDay,
   });
 
   /// Há pelo menos um campo concreto a alterar (caso contrário, na edição,
@@ -68,6 +72,16 @@ class VoiceCommand {
       );
     }
 
+    if (_isRecurring(norm)) {
+      final p = ExpenseParser.parse(input, categories, now: now);
+      // "todo o dia 1" / "dia 1" → o parser leu como data; usamos só o dia.
+      return VoiceCommand._(
+        intent: VoiceIntent.createRecurring,
+        create: p,
+        recurringDay: p.date?.day,
+      );
+    }
+
     return VoiceCommand._(
       intent: VoiceIntent.create,
       create: ExpenseParser.parse(input, categories, now: now),
@@ -83,10 +97,15 @@ class VoiceCommand {
   static final RegExp _editVerb = RegExp(
       r'\b(edita|editar|edite|altera|alterar|altere|muda|mudar|mude|corrige|corrigir|corrige|atualiza|atualizar|troca|trocar)\b');
 
+  static final RegExp _recurringMark = RegExp(
+      r'\b(recorrente|recorrentes|mensal|mensalmente|todos os meses|todo mes|cada mes|por mes|todo o dia)\b');
+
   static bool _isDelete(String norm) => _deleteVerb.hasMatch(norm);
 
   static bool _isEdit(String norm) =>
       !_deleteVerb.hasMatch(norm) && _editVerb.hasMatch(norm);
+
+  static bool _isRecurring(String norm) => _recurringMark.hasMatch(norm);
 
   static String _stripAccents(String s) {
     const map = {

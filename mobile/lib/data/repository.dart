@@ -141,11 +141,11 @@ class Repository {
 
   /// Cria uma regra. [lastGenerated] arranca no mês anterior ao atual, para que
   /// a geração comece já no mês corrente (e faça catch-up se a app não abrir).
-  Future<void> addRecurring(Recurring r, {DateTime? now}) async {
+  Future<int> addRecurring(Recurring r, {DateTime? now}) async {
     final d = await _db;
     final n = now ?? DateTime.now();
     final prev = DateTime(n.year, n.month - 1, 1);
-    await d.insert('recurring', {
+    return d.insert('recurring', {
       'amount': r.amount,
       'description': r.description.trim(),
       'category_id': r.categoryId,

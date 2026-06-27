@@ -52,9 +52,65 @@ Future<void> handleVoiceText(Repository repo, String text) async {
       await _handleDelete(repo, messenger);
     case VoiceIntent.edit:
       await _handleEdit(repo, cmd, messenger);
+    case VoiceIntent.createRecurring:
+      await _handleCreateRecurring(repo, cmd, messenger);
     case VoiceIntent.create:
       await _handleCreate(repo, cmd.create!, messenger);
   }
+}
+
+// -------------------------------------------------------------------- //
+// Criar recorrente (por voz)
+// -------------------------------------------------------------------- //
+Future<void> _handleCreateRecurring(
+  Repository repo,
+  VoiceCommand cmd,
+  ScaffoldMessengerState? messenger,
+) async {
+  final p = cmd.create!;
+  final amount = p.amount;
+  final category = p.category;
+
+  // Sem valor/categoria utilizáveis → não dá para criar a regra às cegas.
+  if (amount == null || amount <= 0 || category == null) {
+    messenger?.showSnackBar(const SnackBar(
+        content: Text(
+            'Para uma recorrente preciso do valor e da categoria. Ex.: "renda de 500 em casa todo o dia 1".')));
+    return;
+  }
+
+  final day = (cmd.recurringDay ?? _today().day).clamp(1, 31);
+  final value = double.parse(amount.toStringAsFixed(2));
+  final desc = _cleanRecurringDesc(p.description);
+
+  final id = await repo.addRecurring(Recurring(
+    amount: value,
+    description: desc,
+    categoryId: category.id!,
+    dayOfMonth: day,
+  ));
+  // O refrescar do dashboard materializa já a despesa deste mês, se for devido.
+  expensesRevision.value++;
+
+  messenger?.showSnackBar(_snack(
+    '🔁 Recorrente: ${fmtMoney(value)} · ${category.icon} ${category.name} · todo o dia $day',
+    onUndo: () async {
+      await repo.deleteRecurring(id);
+      expensesRevision.value++;
+    },
+  ));
+}
+
+/// Remove marcadores de recorrência da descrição ditada ("todo o", "mensal"…).
+String _cleanRecurringDesc(String s) {
+  var r = ' $s ';
+  r = r.replaceAll(
+      RegExp(
+          r'\b(recorrente|recorrentes|mensal|mensalmente|todos os meses|todo mes|todo o mes|cada mes|por mes|todo o|todos os)\b',
+          caseSensitive: false,
+          unicode: true),
+      ' ');
+  return r.replaceAll(RegExp(r'\s+'), ' ').trim();
 }
 
 // -------------------------------------------------------------------- //

@@ -7,11 +7,10 @@ import '../charts/donut.dart';
 import '../charts/year_line.dart';
 import '../data/repository.dart';
 import '../models/models.dart';
-import '../voice/voice_capture_sheet.dart';
 import '../voice/voice_intake.dart';
+import '../voice/voice_listener.dart';
 import 'add_expense_sheet.dart';
 import 'categories_page.dart';
-import 'recurring_page.dart';
 import 'format.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -37,8 +36,9 @@ class _DashboardData {
   });
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final _repo = Repository();
+  late final VoiceListener _voice;
   late int _year;
   late int _month;
   Future<_DashboardData>? _future;
@@ -51,14 +51,29 @@ class _HomePageState extends State<HomePage> {
     _year = now.year;
     _month = now.month;
     _refresh();
-    // Refrescar quando uma despesa é criada/anulada por voz (deep link ou 🎤).
+    // Refrescar quando uma despesa é criada/alterada/anulada por voz.
     expensesRevision.addListener(_onExpensesChanged);
+    // Voz mãos-livres: ouve ao abrir + escuta contínua por palavra-chave.
+    _voice = VoiceListener(_repo);
+    WidgetsBinding.instance.addObserver(this);
+    _voice.start();
   }
 
   @override
   void dispose() {
     expensesRevision.removeListener(_onExpensesChanged);
+    WidgetsBinding.instance.removeObserver(this);
+    _voice.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _voice.onForeground();
+    } else {
+      _voice.onBackground();
+    }
   }
 
   void _onExpensesChanged() {
@@ -67,11 +82,6 @@ class _HomePageState extends State<HomePage> {
 
   void _refresh() {
     setState(() => _future = _loadData());
-  }
-
-  Future<void> _listenVoice() async {
-    final text = await captureVoice(context);
-    if (text != null) await handleVoiceText(_repo, text);
   }
 
   Future<_DashboardData> _loadData() async {
@@ -108,14 +118,6 @@ class _HomePageState extends State<HomePage> {
       MaterialPageRoute(builder: (_) => CategoriesPage(repo: _repo)),
     );
     if (changed == true) _refresh();
-  }
-
-  Future<void> _openRecurring() async {
-    await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => RecurringPage(repo: _repo)),
-    );
-    // Recriar regras pode gerar despesas novas → refrescar sempre.
-    _refresh();
   }
 
   Future<void> _editExpense(ExpenseView e) async {
@@ -168,14 +170,7 @@ class _HomePageState extends State<HomePage> {
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          FloatingActionButton.small(
-            heroTag: 'fab_voz',
-            onPressed: _listenVoice,
-            backgroundColor: AppColors.surface,
-            foregroundColor: AppColors.accent,
-            tooltip: 'Registar por voz',
-            child: const Text('🎤', style: TextStyle(fontSize: 20)),
-          ),
+          _voiceIndicator(),
           const SizedBox(height: 12),
           FloatingActionButton(
             heroTag: 'fab_add',
@@ -273,6 +268,36 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// Indicador de microfone (substitui o antigo botão de voz).
+  ///
+  /// Não serve para "começar a ouvir" — a app já ouve sozinha; serve para
+  /// SILENCIAR/reativar a escuta (bateria/privacidade) e mostrar o estado.
+  Widget _voiceIndicator() {
+    return ListenableBuilder(
+      listenable: _voice,
+      builder: (context, _) {
+        if (_voice.status == VoiceStatus.unavailable) {
+          return const SizedBox.shrink();
+        }
+        final on = _voice.enabled;
+        final listening = on && _voice.status == VoiceStatus.listening;
+        return FloatingActionButton.small(
+          heroTag: 'fab_voz',
+          onPressed: _voice.toggle,
+          backgroundColor: AppColors.surface,
+          foregroundColor: on ? AppColors.accent : AppColors.faint,
+          tooltip: on
+              ? 'A ouvir (diz "despesas…") · tocar para silenciar'
+              : 'Voz silenciada · tocar para ativar',
+          child: Icon(
+            on ? (listening ? Icons.mic : Icons.mic_none) : Icons.mic_off,
+            size: 20,
+          ),
+        );
+      },
+    );
+  }
+
   // -------------------------------------------------------------------- //
   // Cabeçalho: marca + seletor de mês/ano + gerir categorias
   // -------------------------------------------------------------------- //
@@ -300,11 +325,6 @@ class _HomePageState extends State<HomePage> {
               style: display(20, weight: FontWeight.w600)),
         ),
         _periodButton(),
-        IconButton(
-          icon: const Text('🔁', style: TextStyle(fontSize: 18)),
-          onPressed: _openRecurring,
-          tooltip: 'Despesas recorrentes',
-        ),
         IconButton(
           icon: const Text('🏷️', style: TextStyle(fontSize: 18)),
           onPressed: _openCategories,

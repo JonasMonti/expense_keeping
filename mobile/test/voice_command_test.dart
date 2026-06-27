@@ -95,4 +95,36 @@ void main() {
       expect(c.hasEditChange, isFalse);
     });
   });
+
+  group('recorrentes por voz', () {
+    test('"renda de 500 em casa todo o dia 1"', () {
+      final c = VoiceCommand.parse(
+          'renda de 500 euros em casa todo o dia 1', cats,
+          now: base);
+      expect(c.intent, VoiceIntent.createRecurring);
+      expect(c.create?.amount, 500);
+      expect(c.create?.category?.name, 'Casa');
+      expect(c.recurringDay, 1);
+    });
+
+    test('"cria recorrente 30 euros transportes" (sem dia → null)', () {
+      final c = VoiceCommand.parse(
+          'cria recorrente 30 euros transportes', cats,
+          now: base);
+      expect(c.intent, VoiceIntent.createRecurring);
+      expect(c.create?.amount, 30);
+      expect(c.create?.category?.name, 'Transportes');
+      expect(c.recurringDay, isNull);
+    });
+
+    test('"mensalmente" também marca recorrente', () {
+      final c = VoiceCommand.parse('15 euros lazer mensalmente', cats);
+      expect(c.intent, VoiceIntent.createRecurring);
+    });
+
+    test('despesa normal não é confundida com recorrente', () {
+      expect(VoiceCommand.parse('gastei 5 euros em lazer', cats).intent,
+          VoiceIntent.create);
+    });
+  });
 }

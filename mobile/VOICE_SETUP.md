@@ -1,16 +1,25 @@
-# Registar despesas por voz 🎤
+# Comandos por voz 🎤
 
-A app aceita despesas ditadas por voz de duas formas:
+A app é mãos-livres: **não há botão para ouvir**. Funciona assim:
 
-1. **Botão 🎤 dentro da app** — abre a app, toca no microfone (canto inferior
-   direito), dita a frase e a despesa é criada.
-2. **Sem abrir a app**, pelo assistente do telemóvel (Siri / Google Assistant),
+1. **Ao abrir a app**, começa logo a ouvir **um** comando (sem palavra-chave).
+2. **Enquanto a app está aberta**, fica à escuta contínua e só age quando a frase
+   começa pela palavra-chave **"despesas …"** (ex.: *"despesas, apaga a última"*).
+3. O indicador de microfone (canto inferior direito) mostra o estado e serve para
+   **silenciar/reativar** a escuta (poupar bateria ou por privacidade) — não para
+   "começar a ouvir", que é automático.
+4. **Sem abrir a app**, pelo assistente do telemóvel (Siri / Google Assistant),
    que entrega a frase à app por um *deep link*.
 
-> **Porque não há "palavra mágica" própria?** Em iPhone/Android *normais*, nenhuma
-> app de terceiros pode ouvir o microfone sempre em segundo plano (o iOS proíbe-o;
-> o Android só com um serviço que gasta muita bateria). Por isso usamos o assistente
-> do sistema — que já tem licença para estar sempre a ouvir — como gatilho.
+> **Porque não ouve antes de abrir / em segundo plano?** Em iPhone/Android *normais*,
+> nenhuma app de terceiros pode ouvir o microfone sempre em segundo plano (o iOS
+> proíbe-o; o Android só com um serviço que gasta muita bateria). A "palavra mágica"
+> tipo "Ok Google" só existe porque é o *sistema operativo* a ouvir. Por isso a
+> escuta da app só acontece com a app aberta, e para fora dela usa-se o assistente.
+
+> **Nota:** com a escuta contínua ligada, o telemóvel pode emitir o "beep" do sistema
+> a cada reinício de sessão e gasta mais bateria. Silencia no indicador 🎤 quando não
+> precisares.
 
 ## Como falar
 
@@ -50,6 +59,18 @@ Também sobre a **última despesa**. Diz o que queres mudar:
 - *"Muda a categoria da última para transportes"*
 - *"Muda a data da última para ontem"*
 - *"Edita a última despesa"* (sem indicar o quê → abre o formulário preenchido)
+
+### Recorrentes
+
+Cria uma despesa que se repete todos os meses:
+
+- *"Renda de 500 euros em casa todo o dia 1"*
+- *"Cria recorrente de 30 euros em transportes"* (sem dia → usa o dia de hoje)
+- *"15 euros lazer mensalmente"*
+
+Para **ver, pausar ou apagar** recorrentes, abre o formulário de nova despesa e
+toca em *"🔁 Ver despesas recorrentes"* (também há o interruptor *"Repetir todos
+os meses"* ao criar uma despesa normal).
 
 Em todos os casos aparece uma faixa **"Anular"** durante alguns segundos, caso a
 transcrição tenha saído errada.

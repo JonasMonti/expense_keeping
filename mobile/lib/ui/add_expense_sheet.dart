@@ -8,6 +8,7 @@ import '../data/repository.dart';
 import '../models/models.dart';
 import '../ocr/receipt_scanner.dart';
 import 'format.dart';
+import 'recurring_page.dart';
 import 'theme.dart';
 
 /// Mostra o sheet e devolve true se foi registada/alterada uma despesa.
@@ -79,6 +80,7 @@ class _AddExpenseFormState extends State<_AddExpenseForm> {
   late final TextEditingController _descCtrl;
   late Category _category;
   DateTime _date = _today();
+  bool _repeatMonthly = false;
   String? _error;
 
   bool get _isEditing => widget.editing != null;
@@ -144,8 +146,24 @@ class _AddExpenseFormState extends State<_AddExpenseForm> {
       await widget.repo.updateExpense(e);
     } else {
       await widget.repo.addExpense(e);
+      // Opção "repetir todos os meses" → cria também uma regra recorrente,
+      // no dia escolhido para esta despesa.
+      if (_repeatMonthly) {
+        await widget.repo.addRecurring(Recurring(
+          amount: e.amount,
+          description: e.description,
+          categoryId: e.categoryId,
+          dayOfMonth: _date.day,
+        ));
+      }
     }
     if (mounted) Navigator.of(context).pop(true);
+  }
+
+  Future<void> _openRecurringList() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => RecurringPage(repo: widget.repo)),
+    );
   }
 
   /// Lê uma fatura com a câmara/galeria e preenche valor e descrição.
@@ -269,6 +287,35 @@ class _AddExpenseFormState extends State<_AddExpenseForm> {
               hintText: 'opcional — ex: almoço',
             ),
           ),
+          if (!_isEditing) ...[
+            const SizedBox(height: 6),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              activeThumbColor: AppColors.accent,
+              title: const Text('Repetir todos os meses',
+                  style: TextStyle(fontFamily: kBody, fontSize: 14.5)),
+              subtitle: Text(
+                'Cria automaticamente no dia ${_date.day} de cada mês',
+                style: const TextStyle(
+                    fontFamily: kBody, fontSize: 12.5, color: AppColors.muted),
+              ),
+              value: _repeatMonthly,
+              onChanged: (v) => setState(() => _repeatMonthly = v),
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: _openRecurringList,
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.muted,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  minimumSize: const Size(0, 32),
+                ),
+                child: const Text('🔁  Ver despesas recorrentes',
+                    style: TextStyle(fontFamily: kBody, fontSize: 13)),
+              ),
+            ),
+          ],
           if (_error != null) ...[
             const SizedBox(height: 12),
             Text(_error!,
