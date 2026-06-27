@@ -32,7 +32,7 @@ class CategoryDonut extends StatelessWidget {
                     color: hexColor(r.color),
                     radius: 26,
                     showTitle: false,
-                    borderSide: const BorderSide(color: Colors.white, width: 2),
+                    borderSide: BorderSide(color: AppColors.surface, width: 2),
                   ),
               ],
             ),
@@ -40,7 +40,7 @@ class CategoryDonut extends StatelessWidget {
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('Total',
+              Text('Total',
                   style: TextStyle(
                       fontFamily: kBody, fontSize: 13, color: AppColors.muted)),
               const SizedBox(height: 2),

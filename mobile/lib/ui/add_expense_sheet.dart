@@ -273,7 +273,7 @@ class _AddExpenseFormState extends State<_AddExpenseForm> {
                 children: [
                   Text(fmtDate(_date),
                       style: const TextStyle(fontFamily: kBody, fontSize: 15)),
-                  const Icon(Icons.calendar_today_outlined,
+                  Icon(Icons.calendar_today_outlined,
                       size: 18, color: AppColors.muted),
                 ],
               ),
@@ -296,7 +296,7 @@ class _AddExpenseFormState extends State<_AddExpenseForm> {
                   style: TextStyle(fontFamily: kBody, fontSize: 14.5)),
               subtitle: Text(
                 'Cria automaticamente no dia ${_date.day} de cada mês',
-                style: const TextStyle(
+                style: TextStyle(
                     fontFamily: kBody, fontSize: 12.5, color: AppColors.muted),
               ),
               value: _repeatMonthly,

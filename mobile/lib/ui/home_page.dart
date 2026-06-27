@@ -13,6 +13,7 @@ import 'add_expense_sheet.dart';
 import 'categories_page.dart';
 import 'format.dart';
 import 'theme.dart';
+import 'theme_controller.dart';
 import 'widgets.dart';
 
 class HomePage extends StatefulWidget {
@@ -146,7 +147,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar',
+            child: Text('Cancelar',
                 style: TextStyle(fontFamily: kBody, color: AppColors.muted)),
           ),
           TextButton(
@@ -189,7 +190,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               future: _future,
               builder: (context, snap) {
                 if (!snap.hasData) {
-                  return const Center(
+                  return Center(
                       child:
                           CircularProgressIndicator(color: AppColors.accent));
                 }
@@ -238,7 +239,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   textAlign: TextAlign.end,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12, color: AppColors.faint),
+                  style: TextStyle(fontSize: 12, color: AppColors.faint),
                 ),
               ),
             );
@@ -259,12 +260,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         AppCard(child: YearLineChart(rows: d.yearRows, highlightMonth: _month)),
       ],
       if (d.total == 0)
-        const Padding(
-          padding: EdgeInsets.only(top: 22),
+        Padding(
+          padding: const EdgeInsets.only(top: 22),
           child: AppCard(
             child: Row(
               children: [
-                Text('ℹ️ ', style: TextStyle(fontSize: 16)),
+                const Text('ℹ️ ', style: TextStyle(fontSize: 16)),
                 Expanded(
                   child: Text(
                     'Sem despesas neste mês. Toca no + para adicionar.',
@@ -369,12 +370,37 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               style: display(20, weight: FontWeight.w600)),
         ),
         _periodButton(),
+        _themeButton(),
         IconButton(
           icon: const Text('🏷️', style: TextStyle(fontSize: 18)),
           onPressed: _openCategories,
           tooltip: 'Gerir categorias',
         ),
       ],
+    );
+  }
+
+  /// Botão de tema (emoji): menu Sistema / Claro / Escuro. A cara reflete o
+  /// modo escolhido. Persistido em [themeController].
+  Widget _themeButton() {
+    const faces = {
+      ThemeMode.system: '🌗',
+      ThemeMode.light: '☀️',
+      ThemeMode.dark: '🌙',
+    };
+    return ListenableBuilder(
+      listenable: themeController,
+      builder: (context, _) => PopupMenuButton<ThemeMode>(
+        tooltip: 'Tema',
+        icon: Text(faces[themeController.mode]!,
+            style: const TextStyle(fontSize: 18)),
+        onSelected: themeController.set,
+        itemBuilder: (context) => const [
+          PopupMenuItem(value: ThemeMode.system, child: Text('🌗  Sistema')),
+          PopupMenuItem(value: ThemeMode.light, child: Text('☀️  Claro')),
+          PopupMenuItem(value: ThemeMode.dark, child: Text('🌙  Escuro')),
+        ],
+      ),
     );
   }
 
@@ -393,13 +419,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text('${mesesCurtoPt[_month - 1]} $_year',
-                style: const TextStyle(
+                style: TextStyle(
                     fontFamily: kBody,
                     fontWeight: FontWeight.w600,
                     fontSize: 13.5,
                     color: AppColors.ink)),
             const SizedBox(width: 4),
-            const Icon(Icons.expand_more, size: 18, color: AppColors.muted),
+            Icon(Icons.expand_more, size: 18, color: AppColors.muted),
           ],
         ),
       ),

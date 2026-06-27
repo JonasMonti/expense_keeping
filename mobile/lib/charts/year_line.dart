@@ -36,7 +36,7 @@ class YearLineChart extends StatelessWidget {
             show: true,
             drawVerticalLine: false,
             getDrawingHorizontalLine: (_) =>
-                const FlLine(color: AppColors.border, strokeWidth: 1),
+                FlLine(color: AppColors.border, strokeWidth: 1),
           ),
           borderData: FlBorderData(show: false),
           titlesData: FlTitlesData(
@@ -55,7 +55,7 @@ class YearLineChart extends StatelessWidget {
                   return Padding(
                     padding: const EdgeInsets.only(top: 8),
                     child: Text(mesesCurtoPt[i],
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontFamily: kBody,
                             fontSize: 11,
                             color: AppColors.muted)),
@@ -66,8 +66,8 @@ class YearLineChart extends StatelessWidget {
           ),
           lineTouchData: LineTouchData(
             touchTooltipData: LineTouchTooltipData(
-              getTooltipColor: (_) => Colors.white,
-              tooltipBorder: const BorderSide(color: AppColors.border),
+              getTooltipColor: (_) => AppColors.surface,
+              tooltipBorder: BorderSide(color: AppColors.border),
               getTooltipItems: (spots) => spots
                   .map((s) => LineTooltipItem(
                         '${mesesCurtoPt[s.x.round()]}\n${fmtMoney(s.y)}',
@@ -91,7 +91,7 @@ class YearLineChart extends StatelessWidget {
                     radius: isSel ? 6 : 3,
                     color: AppColors.accent,
                     strokeWidth: 2,
-                    strokeColor: Colors.white,
+                    strokeColor: AppColors.surface,
                   );
                 },
               ),

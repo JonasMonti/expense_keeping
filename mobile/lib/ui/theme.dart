@@ -1,19 +1,88 @@
 /// Identidade visual — espelha src/ui.py (paleta esmeralda, tipografia, formatação).
+///
+/// Suporta tema **claro** e **escuro**. A paleta [AppColors] é comutável em
+/// runtime: [AppColors.apply] troca os valores conforme o brilho ativo e é
+/// chamada num único sítio (`MaterialApp.builder`), antes de as páginas
+/// construírem. Os widgets continuam a ler `AppColors.x` como antes.
 library;
 
 import 'package:flutter/material.dart';
 
-/// Paleta (igual às variáveis CSS de src/ui.py).
+/// Conjunto de cores de um tema (claro ou escuro). Imutável.
+class AppPalette {
+  final Color bg, surface, border, ink, muted, faint;
+  final Color accent, accentInk, accentSoft, shadow;
+  const AppPalette({
+    required this.bg,
+    required this.surface,
+    required this.border,
+    required this.ink,
+    required this.muted,
+    required this.faint,
+    required this.accent,
+    required this.accentInk,
+    required this.accentSoft,
+    required this.shadow,
+  });
+}
+
+/// Tema claro (paleta original — igual às variáveis CSS de src/ui.py).
+const AppPalette kLightPalette = AppPalette(
+  bg: Color(0xFFF4F6F4),
+  surface: Color(0xFFFFFFFF),
+  border: Color(0xFFE7EAE7),
+  ink: Color(0xFF16201C),
+  muted: Color(0xFF6E7872),
+  faint: Color(0xFF9AA39D),
+  accent: Color(0xFF0F7B66),
+  accentInk: Color(0xFF0A5848),
+  accentSoft: Color(0xFFE7F2EE),
+  shadow: Color(0x0A14201C),
+);
+
+/// Tema escuro — mantém a identidade esmeralda, com acento mais claro para
+/// contrastar sobre fundos escuros.
+const AppPalette kDarkPalette = AppPalette(
+  bg: Color(0xFF0F1613),
+  surface: Color(0xFF19211D),
+  border: Color(0xFF2A332E),
+  ink: Color(0xFFE9EEEB),
+  muted: Color(0xFF9AA49E),
+  faint: Color(0xFF6B756F),
+  accent: Color(0xFF2BA890),
+  accentInk: Color(0xFF6FD3BC),
+  accentSoft: Color(0xFF15302A),
+  shadow: Color(0x00000000), // sem sombra no escuro (a borda já separa)
+);
+
+/// Paleta ativa — campos mutáveis lidos por todo o UI. Arranca no tema claro
+/// e é trocada por [apply] consoante o brilho resolvido.
 abstract class AppColors {
-  static const bg = Color(0xFFF4F6F4);
-  static const surface = Color(0xFFFFFFFF);
-  static const border = Color(0xFFE7EAE7);
-  static const ink = Color(0xFF16201C);
-  static const muted = Color(0xFF6E7872);
-  static const faint = Color(0xFF9AA39D);
-  static const accent = Color(0xFF0F7B66);
-  static const accentInk = Color(0xFF0A5848);
-  static const accentSoft = Color(0xFFE7F2EE);
+  static Color bg = kLightPalette.bg;
+  static Color surface = kLightPalette.surface;
+  static Color border = kLightPalette.border;
+  static Color ink = kLightPalette.ink;
+  static Color muted = kLightPalette.muted;
+  static Color faint = kLightPalette.faint;
+  static Color accent = kLightPalette.accent;
+  static Color accentInk = kLightPalette.accentInk;
+  static Color accentSoft = kLightPalette.accentSoft;
+  static Color shadow = kLightPalette.shadow;
+
+  /// Troca a paleta ativa para o brilho dado (chamado no `MaterialApp.builder`).
+  static void apply(Brightness brightness) {
+    final p = brightness == Brightness.dark ? kDarkPalette : kLightPalette;
+    bg = p.bg;
+    surface = p.surface;
+    border = p.border;
+    ink = p.ink;
+    muted = p.muted;
+    faint = p.faint;
+    accent = p.accent;
+    accentInk = p.accentInk;
+    accentSoft = p.accentSoft;
+    shadow = p.shadow;
+  }
 }
 
 /// Famílias tipográficas (declaradas no pubspec).
@@ -28,45 +97,50 @@ Color hexColor(String hex, {int alpha = 0xFF}) {
   return Color(v).withAlpha(alpha);
 }
 
-ThemeData buildTheme() {
-  final base = ThemeData.light(useMaterial3: true);
+ThemeData buildTheme(AppPalette p, Brightness brightness) {
+  final base = ThemeData(brightness: brightness, useMaterial3: true);
   return base.copyWith(
-    scaffoldBackgroundColor: AppColors.bg,
+    scaffoldBackgroundColor: p.bg,
     colorScheme: base.colorScheme.copyWith(
-      primary: AppColors.accent,
-      surface: AppColors.surface,
-      onSurface: AppColors.ink,
+      brightness: brightness,
+      primary: p.accent,
+      surface: p.surface,
+      onSurface: p.ink,
     ),
     textTheme: base.textTheme.apply(
       fontFamily: kBody,
-      bodyColor: AppColors.ink,
-      displayColor: AppColors.ink,
+      bodyColor: p.ink,
+      displayColor: p.ink,
     ),
     primaryTextTheme: base.primaryTextTheme.apply(fontFamily: kBody),
-    dividerColor: AppColors.border,
-    cardTheme: const CardThemeData(
-      color: AppColors.surface,
+    dividerColor: p.border,
+    cardTheme: CardThemeData(
+      color: p.surface,
       elevation: 0,
       margin: EdgeInsets.zero,
     ),
+    dialogTheme: DialogThemeData(backgroundColor: p.surface),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: AppColors.bg,
+      fillColor: p.bg,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.border),
+        borderSide: BorderSide(color: p.border),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.border),
+        borderSide: BorderSide(color: p.border),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.accent, width: 1.5),
+        borderSide: BorderSide(color: p.accent, width: 1.5),
       ),
     ),
   );
 }
+
+ThemeData buildLightTheme() => buildTheme(kLightPalette, Brightness.light);
+ThemeData buildDarkTheme() => buildTheme(kDarkPalette, Brightness.dark);
 
 /// Estilos reutilizáveis para texto.
 TextStyle display(double size, {Color? color, FontWeight weight = FontWeight.w600}) =>
@@ -79,12 +153,12 @@ TextStyle display(double size, {Color? color, FontWeight weight = FontWeight.w60
       fontFeatures: const [FontFeature.tabularFigures()],
     );
 
-const BoxDecoration cardDecoration = BoxDecoration(
-  color: AppColors.surface,
-  borderRadius: BorderRadius.all(Radius.circular(18)),
-  border: Border.fromBorderSide(BorderSide(color: AppColors.border)),
-  boxShadow: [
-    BoxShadow(color: Color(0x0A14201C), blurRadius: 30, offset: Offset(0, 10)),
-    BoxShadow(color: Color(0x0814201C), blurRadius: 2, offset: Offset(0, 1)),
-  ],
-);
+/// Decoração do cartão (lê a paleta ativa — por isso é um getter, não const).
+BoxDecoration get cardDecoration => BoxDecoration(
+      color: AppColors.surface,
+      borderRadius: const BorderRadius.all(Radius.circular(18)),
+      border: Border.all(color: AppColors.border),
+      boxShadow: [
+        BoxShadow(color: AppColors.shadow, blurRadius: 30, offset: const Offset(0, 10)),
+      ],
+    );

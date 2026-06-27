@@ -1,7 +1,7 @@
 name: despesas
 description: "Gestão de despesas pessoais — app nativa (Flutter)."
 publish_to: 'none'
-version: 1.2.1+5
+version: 1.3.0+6
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
@@ -20,6 +20,7 @@ dependencies:
   speech_to_text: ^7.4.0  # reconhecimento de voz (botão 🎤)
   image_picker: ^1.1.2    # tirar foto / escolher imagem da fatura
   google_mlkit_text_recognition: ^0.15.0  # OCR no dispositivo (offline, ler faturas)
+  shared_preferences: ^2.3.2  # preferência de tema (claro/escuro/sistema)
 
 dev_dependencies:
   flutter_test:

@@ -33,7 +33,7 @@ class Eyebrow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Text(
         text.toUpperCase(),
-        style: const TextStyle(
+        style: TextStyle(
           fontFamily: kBody,
           fontSize: 11.5,
           fontWeight: FontWeight.w600,
@@ -101,13 +101,13 @@ class HeroCard extends StatelessWidget {
 Widget statText(String prefix, {String? bold, String? suffix}) {
   return RichText(
     text: TextSpan(
-      style: const TextStyle(fontFamily: kBody, fontSize: 13.5, color: AppColors.muted),
+      style: TextStyle(fontFamily: kBody, fontSize: 13.5, color: AppColors.muted),
       children: [
         TextSpan(text: prefix),
         if (bold != null)
           TextSpan(
             text: bold,
-            style: const TextStyle(
+            style: TextStyle(
                 color: AppColors.ink, fontWeight: FontWeight.w600),
           ),
         if (suffix != null) TextSpan(text: suffix),
@@ -154,7 +154,7 @@ class CategoryBars extends StatelessWidget {
               Expanded(
                 child: RichText(
                   text: TextSpan(
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontFamily: kBody,
                         fontSize: 14.5,
                         color: AppColors.ink,
@@ -163,7 +163,7 @@ class CategoryBars extends StatelessWidget {
                       TextSpan(text: '${r.icon} ${r.category}'),
                       TextSpan(
                         text: '  ${pct.toStringAsFixed(0)}%',
-                        style: const TextStyle(
+                        style: TextStyle(
                             color: AppColors.faint,
                             fontSize: 12.5,
                             fontWeight: FontWeight.w400),
@@ -225,7 +225,7 @@ class ExpenseRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 4),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Row(
@@ -234,11 +234,11 @@ class ExpenseRow extends StatelessWidget {
             width: 84,
             child: Text(
               fmtDate(e.spentOn),
-              style: const TextStyle(
+              style: TextStyle(
                   fontFamily: kBody,
                   fontSize: 12.5,
                   color: AppColors.faint,
-                  fontFeatures: [FontFeature.tabularFigures()]),
+                  fontFeatures: const [FontFeature.tabularFigures()]),
             ),
           ),
           CategoryChip(icon: e.icon, color: e.color, size: 34),
@@ -252,13 +252,13 @@ class ExpenseRow extends StatelessWidget {
                 children: [
                   TextSpan(
                     text: e.category,
-                    style: const TextStyle(
+                    style: TextStyle(
                         color: AppColors.ink, fontWeight: FontWeight.w500),
                   ),
                   if (e.description.isNotEmpty)
                     TextSpan(
                       text: ' — ${e.description}',
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: AppColors.muted, fontSize: 13),
                     ),
                 ],

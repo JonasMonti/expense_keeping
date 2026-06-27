@@ -51,7 +51,7 @@ class _RecurringPageState extends State<RecurringPage> {
         backgroundColor: AppColors.bg,
         surfaceTintColor: Colors.transparent,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.ink),
+          icon: Icon(Icons.arrow_back, color: AppColors.ink),
           onPressed: () => Navigator.of(context).pop(_changed),
         ),
         title: Text('Recorrentes', style: display(19)),
@@ -59,18 +59,18 @@ class _RecurringPageState extends State<RecurringPage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
         children: [
-          const Padding(
-            padding: EdgeInsets.only(bottom: 12, left: 4),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12, left: 4),
             child: Text(
               'Criadas automaticamente todos os meses, no dia escolhido.',
               style: TextStyle(color: AppColors.muted, fontSize: 13),
             ),
           ),
           if (_rules.isEmpty)
-            const AppCard(
+            AppCard(
               child: Row(
                 children: [
-                  Text('🔁 ', style: TextStyle(fontSize: 16)),
+                  const Text('🔁 ', style: TextStyle(fontSize: 16)),
                   Expanded(
                     child: Text(
                       'Sem despesas recorrentes. Toca em ➕ para criar a renda, '
@@ -128,7 +128,7 @@ class _RecurringPageState extends State<RecurringPage> {
                     Text(
                       'Todo o dia ${r.dayOfMonth} · ${r.category}'
                       '${r.active ? '' : ' · em pausa'}',
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontFamily: kBody,
                           fontSize: 12.5,
                           color: AppColors.muted),
@@ -139,13 +139,13 @@ class _RecurringPageState extends State<RecurringPage> {
               const SizedBox(width: 8),
               Text(fmtMoney(r.amount), style: display(15)),
               IconButton(
-                icon: const Icon(Icons.edit_outlined,
+                icon: Icon(Icons.edit_outlined,
                     size: 20, color: AppColors.muted),
                 onPressed: () => _showEditor(r),
                 tooltip: 'Editar',
               ),
               IconButton(
-                icon: const Icon(Icons.delete_outline,
+                icon: Icon(Icons.delete_outline,
                     size: 20, color: AppColors.muted),
                 onPressed: () => _confirmDelete(r),
                 tooltip: 'Eliminar',
@@ -171,7 +171,7 @@ class _RecurringPageState extends State<RecurringPage> {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar',
+              child: Text('Cancelar',
                   style: TextStyle(fontFamily: kBody, color: AppColors.muted))),
           TextButton(
               onPressed: () => Navigator.pop(context, true),
@@ -339,8 +339,8 @@ class _RecurringEditorState extends State<_RecurringEditor> {
             onChanged: (d) => setState(() => _day = d!),
           ),
           if (_day > 28)
-            const Padding(
-              padding: EdgeInsets.only(top: 6, left: 4),
+            Padding(
+              padding: const EdgeInsets.only(top: 6, left: 4),
               child: Text(
                 'Nos meses mais curtos usa o último dia.',
                 style: TextStyle(color: AppColors.faint, fontSize: 12),
@@ -360,7 +360,7 @@ class _RecurringEditorState extends State<_RecurringEditor> {
             activeThumbColor: AppColors.accent,
             title: const Text('Ativa',
                 style: TextStyle(fontFamily: kBody, fontSize: 14.5)),
-            subtitle: const Text('Desliga para pausar sem apagar',
+            subtitle: Text('Desliga para pausar sem apagar',
                 style: TextStyle(
                     fontFamily: kBody, fontSize: 12.5, color: AppColors.muted)),
             value: _active,

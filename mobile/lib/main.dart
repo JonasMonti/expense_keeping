@@ -10,10 +10,13 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'data/repository.dart';
 import 'ui/home_page.dart';
 import 'ui/theme.dart';
+import 'ui/theme_controller.dart';
 import 'voice/voice_intake.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Lê a preferência de tema antes de arrancar (evita um flash do tema errado).
+  await themeController.load();
   runApp(const DespesasApp());
 }
 
@@ -64,21 +67,33 @@ class _DespesasAppState extends State<DespesasApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'As Minhas Despesas',
-      debugShowCheckedModeBanner: false,
-      theme: buildTheme(),
-      navigatorKey: navigatorKey,
-      scaffoldMessengerKey: messengerKey,
-      // Interface e date pickers em pt-PT.
-      locale: const Locale('pt'),
-      supportedLocales: const [Locale('pt'), Locale('en')],
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      home: const HomePage(),
+    // Reconstrói quando a preferência de tema muda (claro/escuro/sistema).
+    return ListenableBuilder(
+      listenable: themeController,
+      builder: (context, _) => MaterialApp(
+        title: 'As Minhas Despesas',
+        debugShowCheckedModeBanner: false,
+        theme: buildLightTheme(),
+        darkTheme: buildDarkTheme(),
+        themeMode: themeController.mode,
+        // Sincroniza a paleta ativa (AppColors) com o tema resolvido, antes de
+        // as páginas construírem — reage ao toggle e ao brilho do sistema.
+        builder: (context, child) {
+          AppColors.apply(Theme.of(context).brightness);
+          return child!;
+        },
+        navigatorKey: navigatorKey,
+        scaffoldMessengerKey: messengerKey,
+        // Interface e date pickers em pt-PT.
+        locale: const Locale('pt'),
+        supportedLocales: const [Locale('pt'), Locale('en')],
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: const HomePage(),
+      ),
     );
   }
 }

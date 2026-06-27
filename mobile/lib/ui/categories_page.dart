@@ -49,7 +49,7 @@ class _CategoriesPageState extends State<CategoriesPage> {
           backgroundColor: AppColors.bg,
           surfaceTintColor: Colors.transparent,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: AppColors.ink),
+            icon: Icon(Icons.arrow_back, color: AppColors.ink),
             onPressed: () => Navigator.of(context).pop(_changed),
           ),
           title: Text('Categorias', style: display(19)),
@@ -57,8 +57,8 @@ class _CategoriesPageState extends State<CategoriesPage> {
         body: ListView(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
           children: [
-            const Padding(
-              padding: EdgeInsets.only(bottom: 12, left: 4),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12, left: 4),
               child: Text('As cores são usadas nos gráficos.',
                   style: TextStyle(color: AppColors.muted, fontSize: 13)),
             ),
@@ -100,13 +100,13 @@ class _CategoriesPageState extends State<CategoriesPage> {
                       fontWeight: FontWeight.w500)),
             ),
             IconButton(
-              icon: const Icon(Icons.edit_outlined,
+              icon: Icon(Icons.edit_outlined,
                   size: 20, color: AppColors.muted),
               onPressed: () => _showEdit(c),
               tooltip: 'Editar',
             ),
             IconButton(
-              icon: const Icon(Icons.delete_outline,
+              icon: Icon(Icons.delete_outline,
                   size: 20, color: AppColors.muted),
               onPressed: () => _confirmDelete(c),
               tooltip: 'Eliminar',
@@ -253,7 +253,7 @@ class _CategoryEditorState extends State<_CategoryEditor> {
             ],
           ),
           const SizedBox(height: 16),
-          const Text('Cor',
+          Text('Cor',
               style: TextStyle(
                   fontFamily: kBody, fontSize: 13, color: AppColors.muted)),
           const SizedBox(height: 10),
