@@ -54,6 +54,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _refresh();
     // Refrescar quando uma despesa é criada/alterada/anulada por voz.
     expensesRevision.addListener(_onExpensesChanged);
+    // Repintar quando o tema muda (toggle) — os widgets leem a paleta global
+    // AppColors, por isso precisam de reconstruir explicitamente.
+    themeController.addListener(_onThemeChanged);
     // Voz mãos-livres: ouve ao abrir + escuta contínua por palavra-chave.
     _voice = VoiceListener(_repo);
     WidgetsBinding.instance.addObserver(this);
@@ -63,6 +66,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   @override
   void dispose() {
     expensesRevision.removeListener(_onExpensesChanged);
+    themeController.removeListener(_onThemeChanged);
     WidgetsBinding.instance.removeObserver(this);
     _voice.dispose();
     super.dispose();
@@ -75,6 +79,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     } else {
       _voice.onBackground();
     }
+  }
+
+  /// Tema "Sistema": o brilho do telemóvel mudou → repintar com a nova paleta.
+  @override
+  void didChangePlatformBrightness() {
+    if (mounted) setState(() {});
+  }
+
+  void _onThemeChanged() {
+    if (mounted) setState(() {});
   }
 
   void _onExpensesChanged() {
