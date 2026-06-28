@@ -10,8 +10,10 @@ import '../models/models.dart';
 import '../voice/voice_intake.dart';
 import '../voice/voice_listener.dart';
 import 'add_expense_sheet.dart';
+import 'add_income_sheet.dart';
 import 'categories_page.dart';
 import 'format.dart';
+import 'settings_page.dart';
 import 'theme.dart';
 import 'theme_controller.dart';
 import 'widgets.dart';
@@ -28,12 +30,25 @@ class _DashboardData {
   final List<ExpenseView> expenses;
   final List<MonthTotal> yearRows;
   final int activeDays;
+  // Receitas e saldo.
+  final double balance;
+  final double incomeTotal;
+  final List<IncomeView> incomes;
+  final List<SourceTotal> bySource;
+  final List<MonthTotal> yearIncomeRows;
+  final DateTime? since;
   const _DashboardData({
     required this.total,
     required this.byCat,
     required this.expenses,
     required this.yearRows,
     required this.activeDays,
+    required this.balance,
+    required this.incomeTotal,
+    required this.incomes,
+    required this.bySource,
+    required this.yearIncomeRows,
+    required this.since,
   });
 }
 
@@ -100,8 +115,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<_DashboardData> _loadData() async {
-    // Materializa as despesas recorrentes em falta (mês corrente + catch-up).
+    // Materializa as despesas e receitas recorrentes em falta (mês + catch-up).
     await _repo.generateDueRecurring();
+    await _repo.generateDueRecurringIncomes();
 
     final years = await _repo.availableYears();
     final now = DateTime.now();
@@ -113,6 +129,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final expenses = await _repo.listExpenses(_year, _month);
     final yearRows = await _repo.monthlyTotalsForYear(_year);
     final activeDays = (await _repo.daysWithExpenses(_year, _month)).length;
+    final balance = await _repo.currentBalance();
+    final incomeTotal = await _repo.incomeTotalForMonth(_year, _month);
+    final incomes = await _repo.listIncomes(_year, _month);
+    final bySource = await _repo.incomesBySource(_year, _month);
+    final yearIncomeRows = await _repo.monthlyIncomeForYear(_year);
+    final (_, since) = await _repo.getOpeningBalance();
 
     return _DashboardData(
       total: total,
@@ -120,12 +142,72 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       expenses: expenses,
       yearRows: yearRows,
       activeDays: activeDays,
+      balance: balance,
+      incomeTotal: incomeTotal,
+      incomes: incomes,
+      bySource: bySource,
+      yearIncomeRows: yearIncomeRows,
+      since: since,
     );
   }
 
   Future<void> _addExpense() async {
     final added = await showAddExpenseSheet(context, _repo);
     if (added) _refresh();
+  }
+
+  Future<void> _addIncome() async {
+    final added = await showAddIncomeSheet(context, _repo);
+    if (added) _refresh();
+  }
+
+  Future<void> _editIncome(IncomeView i) async {
+    final changed = await showAddIncomeSheet(context, _repo, editing: i);
+    if (changed) _refresh();
+  }
+
+  Future<void> _deleteIncome(IncomeView i) async {
+    await _repo.deleteIncome(i.id);
+    _refresh();
+  }
+
+  Future<void> _openSettings() async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => SettingsPage(repo: _repo)),
+    );
+    if (changed == true) _refresh();
+  }
+
+  Future<bool> _confirmDeleteIncome(IncomeView i) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: Text('Apagar receita?', style: display(18)),
+        content: Text(
+          'Vais apagar ${fmtMoney(i.amount)} · 💶 ${i.source}'
+          '${i.description.isNotEmpty ? ' — ${i.description}' : ''}.\n'
+          'Esta ação não pode ser anulada.',
+          style: const TextStyle(fontFamily: kBody, fontSize: 14, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancelar',
+                style: TextStyle(fontFamily: kBody, color: AppColors.muted)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Apagar',
+                style: TextStyle(
+                    fontFamily: kBody,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFFB4231F))),
+          ),
+        ],
+      ),
+    );
+    return ok ?? false;
   }
 
   Future<void> _openCategories() async {
@@ -187,6 +269,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         children: [
           _voiceIndicator(),
           const SizedBox(height: 12),
+          // Receita: FAB secundário (esmeralda sobre superfície).
+          FloatingActionButton.small(
+            heroTag: 'fab_income',
+            onPressed: _addIncome,
+            backgroundColor: AppColors.surface,
+            foregroundColor: AppColors.accent,
+            tooltip: 'Nova receita',
+            child: const Icon(Icons.savings_outlined, size: 22),
+          ),
+          const SizedBox(height: 12),
+          // Despesa: ação principal.
           FloatingActionButton(
             heroTag: 'fab_add',
             onPressed: _addExpense,
@@ -264,16 +357,31 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   List<Widget> _buildContent(_DashboardData d) {
+    final net = d.incomeTotal - d.total;
+    final netSign = net > 0 ? '+' : (net < 0 ? '−' : '');
+    final sinceTxt = d.since != null ? ' · desde ${fmtDate(d.since!)}' : '';
+    final balanceSub =
+        'Líquido de ${mesesPt[_month - 1]}: $netSign${fmtMoney(net.abs())}$sinceTxt';
+    final hasYear = _yearSum(d) > 0 || _yearIncomeSum(d) > 0;
+    final source = sourceTotalsToCategory(d.bySource);
     return [
       _header(),
       const SizedBox(height: 16),
-      _heroCard(d),
-      if (_yearSum(d) > 0) ...[
+      BalanceCard(amount: d.balance, sub: balanceSub),
+      const SizedBox(height: 14),
+      KpiRow(income: d.incomeTotal, expense: d.total),
+      if (hasYear) ...[
         const SizedBox(height: 22),
-        SectionTitle('Gastos por mês em $_year'),
-        AppCard(child: YearLineChart(rows: d.yearRows, highlightMonth: _month)),
+        SectionTitle('Receitas e despesas em $_year'),
+        AppCard(
+          child: YearLineChart(
+            rows: d.yearRows,
+            highlightMonth: _month,
+            incomeRows: d.yearIncomeRows,
+          ),
+        ),
       ],
-      if (d.total == 0)
+      if (d.total == 0 && d.incomeTotal == 0)
         Padding(
           padding: const EdgeInsets.only(top: 22),
           child: AppCard(
@@ -282,7 +390,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 const Text('ℹ️ ', style: TextStyle(fontSize: 16)),
                 Expanded(
                   child: Text(
-                    'Sem despesas neste mês. Toca no + para adicionar.',
+                    'Sem movimentos neste mês. Toca no + para uma despesa '
+                    'ou no mealheiro para uma receita.',
                     style: TextStyle(color: AppColors.muted, fontSize: 14),
                   ),
                 ),
@@ -291,21 +400,61 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           ),
         )
       else ...[
-        const SizedBox(height: 22),
-        const SectionTitle('Repartição por categoria'),
-        AppCard(child: CategoryDonut(rows: d.byCat, total: d.total)),
-        const SizedBox(height: 22),
-        const SectionTitle('Onde gastaste mais'),
-        AppCard(child: CategoryBars(rows: d.byCat, total: d.total)),
-        const SizedBox(height: 22),
-        SectionTitle('Histórico · ${d.expenses.length} despesas'),
-        ...d.expenses.map(_dismissibleRow),
+        if (d.total > 0) ...[
+          const SizedBox(height: 22),
+          const SectionTitle('Repartição por categoria'),
+          AppCard(child: CategoryDonut(rows: d.byCat, total: d.total)),
+          const SizedBox(height: 22),
+          const SectionTitle('Onde gastaste mais'),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8, left: 4),
+            child: Text(
+              _expenseStats(d),
+              style: TextStyle(
+                  fontFamily: kBody, fontSize: 12.5, color: AppColors.muted),
+            ),
+          ),
+          AppCard(child: CategoryBars(rows: d.byCat, total: d.total)),
+        ],
+        if (d.incomeTotal > 0) ...[
+          const SizedBox(height: 22),
+          const SectionTitle('Receitas por origem'),
+          AppCard(child: CategoryDonut(rows: source, total: d.incomeTotal)),
+          const SizedBox(height: 22),
+          const SectionTitle('De onde veio'),
+          AppCard(child: CategoryBars(rows: source, total: d.incomeTotal)),
+        ],
+        if (d.expenses.isNotEmpty) ...[
+          const SizedBox(height: 22),
+          SectionTitle('Despesas · ${d.expenses.length}'),
+          ...d.expenses.map(_dismissibleRow),
+        ],
+        if (d.incomes.isNotEmpty) ...[
+          const SizedBox(height: 22),
+          SectionTitle('Receitas · ${d.incomes.length}'),
+          ...d.incomes.map(_dismissibleIncomeRow),
+        ],
       ],
     ];
   }
 
   double _yearSum(_DashboardData d) =>
       d.yearRows.fold(0.0, (s, r) => s + r.total);
+  double _yearIncomeSum(_DashboardData d) =>
+      d.yearIncomeRows.fold(0.0, (s, r) => s + r.total);
+
+  /// Legenda do mês: nº de despesas, média por dia ativo e maior categoria.
+  String _expenseStats(_DashboardData d) {
+    final mediaDia = d.activeDays > 0 ? d.total / d.activeDays : 0.0;
+    final bits = <String>[
+      '${d.expenses.length} despesas',
+      'média ${fmtMoney(mediaDia)}/dia ativo',
+    ];
+    if (d.byCat.isNotEmpty) {
+      bits.add('maior: ${d.byCat.first.icon} ${d.byCat.first.category}');
+    }
+    return bits.join(' · ');
+  }
 
   Widget _dismissibleRow(ExpenseView e) {
     return Dismissible(
@@ -323,6 +472,25 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       child: InkWell(
         onTap: () => _editExpense(e),
         child: ExpenseRow(e),
+      ),
+    );
+  }
+
+  Widget _dismissibleIncomeRow(IncomeView i) {
+    return Dismissible(
+      key: ValueKey('inc_${i.id}'),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        color: const Color(0x14B4231F),
+        child: const Icon(Icons.delete_outline, color: Color(0xFFB4231F)),
+      ),
+      confirmDismiss: (_) => _confirmDeleteIncome(i),
+      onDismissed: (_) => _deleteIncome(i),
+      child: InkWell(
+        onTap: () => _editIncome(i),
+        child: IncomeRow(i),
       ),
     );
   }
@@ -389,6 +557,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           icon: const Text('🏷️', style: TextStyle(fontSize: 18)),
           onPressed: _openCategories,
           tooltip: 'Gerir categorias',
+        ),
+        IconButton(
+          icon: const Text('⚙️', style: TextStyle(fontSize: 18)),
+          onPressed: _openSettings,
+          tooltip: 'Definições · saldo e recorrentes',
         ),
       ],
     );
@@ -520,28 +693,5 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       ),
     );
     _refresh();
-  }
-
-  Widget _heroCard(_DashboardData d) {
-    final label = 'Gasto em ${mesesPt[_month - 1]} de $_year';
-    if (d.total <= 0) {
-      return HeroCard(
-        label: label,
-        total: 0,
-        stats: [statText('ainda sem despesas este mês')],
-      );
-    }
-    final mediaDia = d.activeDays > 0 ? d.total / d.activeDays : 0.0;
-    final top = d.byCat.isNotEmpty ? d.byCat.first : null;
-    return HeroCard(
-      label: label,
-      total: d.total,
-      stats: [
-        statText('', bold: '${d.expenses.length}', suffix: ' despesas'),
-        statText('média ', bold: fmtMoney(mediaDia), suffix: '/dia ativo'),
-        if (top != null)
-          statText('maior: ', bold: '${top.icon} ${top.category}'),
-      ],
-    );
   }
 }

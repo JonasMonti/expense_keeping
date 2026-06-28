@@ -59,8 +59,16 @@ def donut_by_category(rows: list[dict], total: float, currency: str = "€") -> 
     return _base(fig, height=320)
 
 
-def year_line(rows: list[dict], highlight_month: int, currency: str = "€") -> go.Figure:
-    """Linha com o total gasto em cada mês do ano (Jan→Dez)."""
+def year_line(
+    rows: list[dict],
+    highlight_month: int,
+    currency: str = "€",
+    income_rows: list[dict] | None = None,
+) -> go.Figure:
+    """Linha com o total gasto em cada mês do ano (Jan→Dez).
+
+    Se `income_rows` for dado, sobrepõe uma segunda linha (receitas, em ink) e
+    mostra legenda — fica uma comparação receitas vs despesas."""
     labels = [MONTH_NAMES_PT[r["month"] - 1] for r in rows]
     values = [r["total"] for r in rows]
     # Destaca o mês selecionado com um marcador maior.
@@ -68,14 +76,32 @@ def year_line(rows: list[dict], highlight_month: int, currency: str = "€") -> 
 
     fig = go.Figure(
         go.Scatter(
-            x=labels, y=values, mode="lines+markers",
+            x=labels, y=values, mode="lines+markers", name="Despesas",
             fill="tozeroy", fillcolor=ACCENT_SOFT,
             line=dict(color=ACCENT, width=2.5),
             marker=dict(size=sizes, color=ACCENT, line=dict(color="#fff", width=2)),
-            hovertemplate="%{x}<br><b>%{y:.2f} " + currency + "</b><extra></extra>",
+            hovertemplate="%{x}<br><b>%{y:.2f} " + currency + "</b><extra>Despesas</extra>",
         )
     )
+    if income_rows is not None:
+        fig.add_trace(
+            go.Scatter(
+                x=[MONTH_NAMES_PT[r["month"] - 1] for r in income_rows],
+                y=[r["total"] for r in income_rows],
+                mode="lines+markers", name="Receitas",
+                line=dict(color=INK, width=2, dash="dot"),
+                marker=dict(size=6, color=INK, line=dict(color="#fff", width=2)),
+                hovertemplate="%{x}<br><b>%{y:.2f} " + currency
+                + "</b><extra>Receitas</extra>",
+            )
+        )
     _base(fig, height=300)
+    if income_rows is not None:
+        fig.update_layout(
+            showlegend=True,
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0,
+                        font=dict(color=MUTED)),
+        )
     fig.update_xaxes(showgrid=False, showline=False, color=MUTED)
     fig.update_yaxes(showgrid=True, gridcolor=BORDER, zeroline=False,
                      rangemode="tozero", color=MUTED, ticksuffix=f" {currency}")

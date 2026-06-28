@@ -166,6 +166,105 @@ class RecurringView {
       );
 }
 
+/// Entrada de dinheiro (espelha [Expense]). A `source` faz o papel da categoria.
+class Income {
+  final int? id;
+  final double amount;
+  final String source; // origem, ex. "Ordenado"
+  final String description;
+  final DateTime receivedOn; // só data (sem hora)
+
+  const Income({
+    this.id,
+    required this.amount,
+    this.source = 'Outros',
+    this.description = '',
+    required this.receivedOn,
+  });
+
+  Map<String, Object?> toMap() => {
+        if (id != null) 'id': id,
+        'amount': amount,
+        'source': source,
+        'description': description,
+        'received_on': _isoDate(receivedOn),
+      };
+}
+
+/// Linha de receita (equivalente ao dict de list_incomes).
+class IncomeView {
+  final int id;
+  final DateTime receivedOn;
+  final double amount;
+  final String source;
+  final String description;
+
+  const IncomeView({
+    required this.id,
+    required this.receivedOn,
+    required this.amount,
+    required this.source,
+    required this.description,
+  });
+
+  factory IncomeView.fromMap(Map<String, Object?> m) => IncomeView(
+        id: m['id'] as int,
+        receivedOn: DateTime.parse(m['received_on'] as String),
+        amount: (m['amount'] as num).toDouble(),
+        source: (m['source'] as String?) ?? 'Outros',
+        description: (m['description'] as String?) ?? '',
+      );
+
+  Income toIncome() => Income(
+        id: id,
+        amount: amount,
+        source: source,
+        description: description,
+        receivedOn: receivedOn,
+      );
+}
+
+/// Regra de receita recorrente (ordenado, subsídio…). Espelha [Recurring], mas
+/// com `source` em vez de categoria.
+class RecurringIncome {
+  final int? id;
+  final double amount;
+  final String source;
+  final String description;
+  final int dayOfMonth; // 1..31 (ajustado ao tamanho do mês na geração)
+  final bool active;
+
+  /// Último mês já materializado, no formato 'yyyy-MM' (null = ainda nenhum).
+  final String? lastGenerated;
+
+  const RecurringIncome({
+    this.id,
+    required this.amount,
+    this.source = 'Outros',
+    this.description = '',
+    required this.dayOfMonth,
+    this.active = true,
+    this.lastGenerated,
+  });
+
+  factory RecurringIncome.fromMap(Map<String, Object?> m) => RecurringIncome(
+        id: m['id'] as int?,
+        amount: (m['amount'] as num).toDouble(),
+        source: (m['source'] as String?) ?? 'Outros',
+        description: (m['description'] as String?) ?? '',
+        dayOfMonth: m['day_of_month'] as int,
+        active: (m['active'] as int? ?? 1) == 1,
+        lastGenerated: m['last_generated'] as String?,
+      );
+}
+
+/// Total de receitas agregado por origem (espelha [CategoryTotal]).
+class SourceTotal {
+  final String source;
+  final double total;
+  const SourceTotal({required this.source, required this.total});
+}
+
 /// Total agregado por categoria (equivalente ao dict de totals_by_category).
 class CategoryTotal {
   final String category;

@@ -7,10 +7,13 @@ local no dispositivo** (funciona totalmente offline, single-user).
 ## O que faz
 
 - Registar e eliminar despesas (swipe para a esquerda no histórico para eliminar)
-- Dashboard do mês: total, nº de despesas, média/dia ativo, maior categoria
-- Donut por categoria + lista "onde gastaste mais" com barras
+- Registar receitas (ordenado, subsídio…) por origem; recorrentes automáticas todos os meses
+- Saldo atual ("quanto tens agora"): valor inicial numa data + receitas − despesas
+- Dashboard do mês: saldo, KPIs (receitas/despesas/líquido), nº de despesas, média/dia, maior categoria
+- Donut por categoria/origem + lista com barras; linha anual receitas vs despesas
 - Linha de evolução anual (Jan→Dez), com o mês selecionado destacado
 - Gerir categorias (nome, emoji, cor) — 8 categorias criadas por defeito
+- Definições: saldo inicial e receitas recorrentes
 - Seletor de mês/ano
 - Tudo em português (pt-PT), valores em formato `1 234,56 €`
 

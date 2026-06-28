@@ -19,6 +19,8 @@ st.set_page_config(
 )
 
 init_db()
+# Materializa as receitas recorrentes em falta (mês corrente + catch-up).
+repo.generate_due_recurring_incomes()
 ui.inject_css()
 
 MESES_PT = [
@@ -26,9 +28,20 @@ MESES_PT = [
     "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 ]
 
+# Origens de receita sugeridas no formulário.
+FONTES_RECEITA = ["Ordenado", "Subsídio de alimentação", "Extra", "Reembolso", "Outros"]
+
 
 def category_lookup() -> dict[str, int]:
     return {f"{c.icon} {c.name}": c.id for c in repo.list_categories()}
+
+
+def parse_valor(valor_str: str) -> Decimal | None:
+    """'12,50' -> Decimal('12.50'); None se inválido."""
+    try:
+        return Decimal(valor_str.replace(",", ".").strip())
+    except (InvalidOperation, AttributeError):
+        return None
 
 
 # --------------------------------------------------------------------------- #
@@ -93,6 +106,89 @@ def dialog_categorias() -> None:
                 st.rerun()
 
 
+@st.dialog("Registar receita")
+def dialog_add_income() -> None:
+    with st.form("nova_receita", clear_on_submit=False):
+        valor_str = st.text_input("Valor", placeholder="1500,00")
+        fonte = st.selectbox("Origem", FONTES_RECEITA)
+        data = st.date_input("Data", value=dt.date.today(), format="DD/MM/YYYY")
+        descricao = st.text_input("Descrição", placeholder="opcional — ex: prémio")
+        ok = st.form_submit_button("💾", use_container_width=True, type="primary")
+
+    if ok:
+        valor = parse_valor(valor_str)
+        if valor is None:
+            st.error("Valor inválido. Escreve um número, ex: 1500,00.")
+            return
+        if valor <= 0:
+            st.error("O valor tem de ser maior que zero.")
+            return
+        repo.add_income(valor, fonte, data, descricao)
+        st.rerun()
+
+
+@st.dialog("Definições", width="large")
+def dialog_settings() -> None:
+    # ---- saldo inicial ----
+    st.markdown("##### Saldo inicial")
+    st.caption("O dinheiro que tinhas numa certa data. A app soma receitas e subtrai "
+               "despesas a partir daí para mostrar o saldo atual.")
+    opening, since = repo.get_opening_balance()
+    with st.form("saldo_inicial", clear_on_submit=False):
+        c1, c2 = st.columns(2)
+        valor_str = c1.text_input("Valor inicial", value=ui.fmt_number(opening))
+        data = c2.date_input("A partir de", value=since or dt.date.today(),
+                             format="DD/MM/YYYY")
+        if st.form_submit_button("💾", use_container_width=True, type="primary"):
+            valor = parse_valor(valor_str)
+            if valor is None:
+                st.error("Valor inválido.")
+            else:
+                repo.set_opening_balance(float(valor), data)
+                st.rerun()
+
+    st.divider()
+
+    # ---- receitas recorrentes ----
+    st.markdown("##### Receitas recorrentes")
+    st.caption("Criadas automaticamente todos os meses, no dia escolhido "
+               "(ordenado, subsídio…).")
+    with st.form("nova_recorrente", clear_on_submit=True):
+        c1, c2, c3, c4 = st.columns([3, 3, 2, 1], vertical_alignment="bottom")
+        v_str = c1.text_input("Valor")
+        fonte = c2.selectbox("Origem", FONTES_RECEITA)
+        dia = c3.number_input("Dia", min_value=1, max_value=31, value=1, step=1)
+        if c4.form_submit_button("➕", use_container_width=True, type="primary"):
+            valor = parse_valor(v_str)
+            if valor is None or valor <= 0:
+                st.error("Valor inválido.")
+            else:
+                repo.add_recurring_income(valor, fonte, int(dia))
+                st.rerun()
+
+    for r in repo.list_recurring_incomes():
+        c1, c2, c3, c4 = st.columns([5, 2, 2, 1], vertical_alignment="center")
+        estado = "" if r["active"] else " · em pausa"
+        c1.markdown(
+            f'<div class="exp-row" style="border:none;padding:.3rem 0">'
+            f'<span class="exp-chip" style="background:#0F7B6622">💶</span>'
+            f'<span class="exp-main"><span class="exp-cat">{html.escape(r["source"])}</span>'
+            f'<span class="exp-desc"> — dia {r["day_of_month"]}{estado}</span></span>'
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+        c2.markdown(ui.money_html(r["amount"]), unsafe_allow_html=True)
+        novo_estado = "Pausar" if r["active"] else "Retomar"
+        if c3.button(novo_estado, key=f"ri_t_{r['id']}", use_container_width=True):
+            repo.update_recurring_income(r["id"], Decimal(str(r["amount"])), r["source"],
+                                         r["day_of_month"], r["description"],
+                                         not r["active"])
+            st.rerun()
+        if c4.button("🗑️", key=f"ri_d_{r['id']}", help="Eliminar"):
+            repo.delete_recurring_income(r["id"])
+            st.rerun()
+
+
 # --------------------------------------------------------------------------- #
 # Cabeçalho: marca, período e ações
 # --------------------------------------------------------------------------- #
@@ -102,11 +198,11 @@ def header() -> tuple[int, int]:
     if hoje.year not in anos:
         anos = sorted(set(anos + [hoje.year]), reverse=True)
 
-    titulo, sel_mes, sel_ano, b_add, b_cat = st.columns(
-        [5, 2, 1.3, 1, 1], vertical_alignment="bottom"
+    titulo, sel_mes, sel_ano, b_add, b_inc, b_cat, b_set = st.columns(
+        [5, 2, 1.3, 1, 1, 1, 1], vertical_alignment="bottom"
     )
     titulo.markdown(
-        '<div class="brand"><span class="dot">€</span> As Minhas Despesas</div>',
+        '<div class="brand"><span class="dot">€</span> As Minhas Finanças</div>',
         unsafe_allow_html=True,
     )
     mes = sel_mes.selectbox(
@@ -117,10 +213,14 @@ def header() -> tuple[int, int]:
         "Ano", anos, index=anos.index(hoje.year) if hoje.year in anos else 0,
         label_visibility="collapsed",
     )
-    if b_add.button("➕", use_container_width=True, type="primary", help="Nova despesa"):
+    if b_add.button("➖", use_container_width=True, type="primary", help="Nova despesa"):
         dialog_add_expense()
+    if b_inc.button("➕", use_container_width=True, help="Nova receita"):
+        dialog_add_income()
     if b_cat.button("🏷️", use_container_width=True, help="Gerir categorias"):
         dialog_categorias()
+    if b_set.button("⚙️", use_container_width=True, help="Definições · saldo e recorrentes"):
+        dialog_settings()
     return ano, mes
 
 
@@ -129,48 +229,80 @@ def header() -> tuple[int, int]:
 # --------------------------------------------------------------------------- #
 def dashboard(ano: int, mes: int) -> None:
     total = repo.total_for_month(ano, mes)
+    receitas_total = repo.income_total_for_month(ano, mes)
+    liquido = receitas_total - total
     by_cat = repo.totals_by_category(ano, mes)
+    by_source = repo.incomes_by_source(ano, mes)
     diario = repo.daily_totals(ano, mes)
     despesas = repo.list_expenses(ano, mes)
+    receitas = repo.list_incomes(ano, mes)
     year_rows = repo.monthly_totals_for_year(ano)
+    year_inc_rows = repo.monthly_income_for_year(ano)
     year_sum = sum(r["total"] for r in year_rows)
+    year_inc_sum = sum(r["total"] for r in year_inc_rows)
+    saldo = repo.current_balance()
+    _, since = repo.get_opening_balance()
 
-    # ---- resumo do mês ----
-    etiqueta = f"Gasto em {MESES_PT[mes - 1]} de {ano}"
+    # ---- saldo atual (quanto tens agora) ----
+    sinal = "+" if liquido > 0 else ("−" if liquido < 0 else "")
+    net_txt = f"{sinal}{ui.fmt_number(abs(liquido))} {CURRENCY}"
+    sub = f"Líquido de {MESES_PT[mes - 1]}: {net_txt}"
+    if since:
+        sub += f" · desde {since.strftime('%d/%m/%Y')}"
+    ui.balance_card(saldo, sub)
+
+    # ---- KPIs do mês ----
+    ui.kpi_grid([
+        ("Receitas do mês", ui.money_html(receitas_total)),
+        ("Despesas do mês", ui.money_html(total)),
+        ("Líquido do mês", ui.signed_money_html(liquido)),
+    ])
+
+    # ---- evolução do ano inteiro (receitas vs despesas) ----
+    if year_sum > 0 or year_inc_sum > 0:
+        ui.section(f"Receitas e despesas por mês em {ano}")
+        st.plotly_chart(
+            charts.year_line(year_rows, mes, CURRENCY, income_rows=year_inc_rows),
+            use_container_width=True, config={"displayModeBar": False})
+
+    if total == 0 and receitas_total == 0:
+        st.info("Sem movimentos neste mês. Usa **➖** para uma despesa "
+                "ou **➕** para uma receita.")
+        return
+
+    # ---- detalhe das despesas ----
     if total > 0:
         media_dia = total / len(diario) if diario else 0
         top = by_cat[0] if by_cat else None
-        stats = [
-            f"<b>{len(despesas)}</b> despesas",
-            f"média {ui.money_html(media_dia)}/dia ativo",
-        ]
+        bits = f"{len(despesas)} despesas · média {ui.fmt_number(media_dia)} {CURRENCY}/dia ativo"
         if top:
-            stats.append(f"maior: <b>{top['icon']} {html.escape(top['category'])}</b>")
-        ui.hero(etiqueta, total, stats)
-    else:
-        ui.hero(etiqueta, 0, ["ainda sem despesas este mês"])
+            bits += f" · maior: {top['icon']} {top['category']}"
+        left, right = st.columns([1, 1], gap="large")
+        with left:
+            ui.section("Repartição por categoria")
+            st.plotly_chart(charts.donut_by_category(by_cat, total, CURRENCY),
+                            use_container_width=True, config={"displayModeBar": False})
+        with right:
+            ui.section("Onde gastaste mais")
+            st.caption(bits)
+            ui.category_list(by_cat, total)
 
-    # ---- evolução do ano inteiro ----
-    if year_sum > 0:
-        ui.section(f"Gastos por mês em {ano}")
-        st.plotly_chart(charts.year_line(year_rows, mes, CURRENCY),
-                        use_container_width=True, config={"displayModeBar": False})
+    # ---- detalhe das receitas ----
+    if receitas_total > 0:
+        rows = ui.source_donut_rows(by_source)
+        left, right = st.columns([1, 1], gap="large")
+        with left:
+            ui.section("Receitas por origem")
+            st.plotly_chart(charts.donut_by_category(rows, receitas_total, CURRENCY),
+                            use_container_width=True, config={"displayModeBar": False})
+        with right:
+            ui.section("De onde veio")
+            ui.category_list(rows, receitas_total)
 
-    if total == 0:
-        st.info('Sem despesas neste mês. Carrega em **＋ Nova despesa** para adicionar.')
-        return
-
-    # ---- detalhe do mês ----
-    left, right = st.columns([1, 1], gap="large")
-    with left:
-        ui.section("Repartição por categoria")
-        st.plotly_chart(charts.donut_by_category(by_cat, total, CURRENCY),
-                        use_container_width=True, config={"displayModeBar": False})
-    with right:
-        ui.section("Onde gastaste mais")
-        ui.category_list(by_cat, total)
-
-    historico(despesas)
+    if despesas:
+        historico(despesas)
+    if receitas:
+        historico_receitas(receitas)
 
 
 def historico(despesas: list[dict]) -> None:
@@ -190,6 +322,27 @@ def historico(despesas: list[dict]) -> None:
         )
         if btn.button("🗑️", key=f"del_{d['id']}", help="Eliminar"):
             repo.delete_expense(d["id"])
+            st.rerun()
+
+
+def historico_receitas(receitas: list[dict]) -> None:
+    st.write("")
+    ui.section(f"Receitas · {len(receitas)} entradas")
+    for r in receitas:
+        row, btn = st.columns([10, 1], vertical_alignment="center")
+        desc = (f'<span class="exp-desc"> — {html.escape(r["description"])}</span>'
+                if r["description"] else "")
+        row.markdown(
+            f'<div class="exp-row">'
+            f'<span class="exp-date">{r["received_on"].strftime("%d/%m/%Y")}</span>'
+            f'<span class="exp-chip" style="background:#0F7B6622">💶</span>'
+            f'<span class="exp-main"><span class="exp-cat">{html.escape(r["source"])}</span>{desc}</span>'
+            f'<span class="exp-amt">{ui.money_html(r["amount"])}</span>'
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+        if btn.button("🗑️", key=f"delinc_{r['id']}", help="Eliminar"):
+            repo.delete_income(r["id"])
             st.rerun()
 
 

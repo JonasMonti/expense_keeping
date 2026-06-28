@@ -316,9 +316,257 @@ class Repository {
   Future<List<int>> availableYears() async {
     final d = await _db;
     final rows = await d.rawQuery('''
-      SELECT DISTINCT CAST(strftime('%Y', spent_on) AS INTEGER) AS y
-      FROM expenses ORDER BY y DESC
+      SELECT y FROM (
+        SELECT DISTINCT CAST(strftime('%Y', spent_on) AS INTEGER) AS y FROM expenses
+        UNION
+        SELECT DISTINCT CAST(strftime('%Y', received_on) AS INTEGER) AS y FROM incomes
+      ) ORDER BY y DESC
     ''');
     return rows.map((r) => r['y'] as int).toList();
+  }
+
+  // ------------------------------------------------------------------ //
+  // Receitas
+  // ------------------------------------------------------------------ //
+  Future<int> addIncome(Income i) async {
+    final d = await _db;
+    return d.insert('incomes', i.toMap());
+  }
+
+  Future<void> updateIncome(Income i) async {
+    final d = await _db;
+    await d.update(
+      'incomes',
+      {
+        'amount': i.amount,
+        'source': i.source,
+        'description': i.description,
+        'received_on': i.toMap()['received_on'],
+      },
+      where: 'id = ?',
+      whereArgs: [i.id],
+    );
+  }
+
+  Future<void> deleteIncome(int id) async {
+    final d = await _db;
+    await d.delete('incomes', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<List<IncomeView>> listIncomes(int year, int month) async {
+    final d = await _db;
+    final rows = await d.rawQuery('''
+      SELECT id, received_on, amount, source, description
+      FROM incomes
+      WHERE strftime('%Y', received_on) = ? AND strftime('%m', received_on) = ?
+      ORDER BY received_on DESC, id DESC
+    ''', [_y(year), _m(month)]);
+    return rows.map(IncomeView.fromMap).toList();
+  }
+
+  Future<double> incomeTotalForMonth(int year, int month) async {
+    final d = await _db;
+    final rows = await d.rawQuery('''
+      SELECT COALESCE(SUM(amount), 0) AS total FROM incomes
+      WHERE strftime('%Y', received_on) = ? AND strftime('%m', received_on) = ?
+    ''', [_y(year), _m(month)]);
+    return (rows.first['total'] as num).toDouble();
+  }
+
+  Future<List<SourceTotal>> incomesBySource(int year, int month) async {
+    final d = await _db;
+    final rows = await d.rawQuery('''
+      SELECT source, COALESCE(SUM(amount), 0) AS total
+      FROM incomes
+      WHERE strftime('%Y', received_on) = ? AND strftime('%m', received_on) = ?
+      GROUP BY source
+      ORDER BY total DESC
+    ''', [_y(year), _m(month)]);
+    return rows
+        .map((m) => SourceTotal(
+              source: m['source'] as String,
+              total: (m['total'] as num).toDouble(),
+            ))
+        .toList();
+  }
+
+  /// Total de receitas por mês de um ano (12 meses, com 0 onde não houve).
+  Future<List<MonthTotal>> monthlyIncomeForYear(int year) async {
+    final d = await _db;
+    final rows = await d.rawQuery('''
+      SELECT CAST(strftime('%m', received_on) AS INTEGER) AS m,
+             SUM(amount) AS total
+      FROM incomes
+      WHERE strftime('%Y', received_on) = ?
+      GROUP BY m
+    ''', [_y(year)]);
+    final found = <int, double>{
+      for (final r in rows) (r['m'] as int): (r['total'] as num).toDouble(),
+    };
+    return [for (var mo = 1; mo <= 12; mo++) MonthTotal(mo, found[mo] ?? 0.0)];
+  }
+
+  // ------------------------------------------------------------------ //
+  // Receitas recorrentes (espelha as despesas recorrentes)
+  // ------------------------------------------------------------------ //
+  Future<List<RecurringIncome>> listRecurringIncomes() async {
+    final d = await _db;
+    final rows = await d.query('recurring_incomes',
+        orderBy: 'day_of_month, id');
+    return rows.map(RecurringIncome.fromMap).toList();
+  }
+
+  /// Cria uma regra. [lastGenerated] arranca no mês anterior ao atual (igual a
+  /// [addRecurring]).
+  Future<int> addRecurringIncome(RecurringIncome r, {DateTime? now}) async {
+    final d = await _db;
+    final n = now ?? DateTime.now();
+    final prev = DateTime(n.year, n.month - 1, 1);
+    return d.insert('recurring_incomes', {
+      'amount': r.amount,
+      'source': r.source.trim(),
+      'description': r.description.trim(),
+      'day_of_month': r.dayOfMonth,
+      'active': r.active ? 1 : 0,
+      'last_generated': _ym(prev),
+    });
+  }
+
+  Future<void> updateRecurringIncome(RecurringIncome r) async {
+    final d = await _db;
+    await d.update(
+      'recurring_incomes',
+      {
+        'amount': r.amount,
+        'source': r.source.trim(),
+        'description': r.description.trim(),
+        'day_of_month': r.dayOfMonth,
+        'active': r.active ? 1 : 0,
+      },
+      where: 'id = ?',
+      whereArgs: [r.id],
+    );
+  }
+
+  Future<void> deleteRecurringIncome(int id) async {
+    final d = await _db;
+    await d.delete('recurring_incomes', where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Materializa as receitas recorrentes em falta até ao mês/dia atual. Mesma
+  /// lógica de [generateDueRecurring], mas inserindo em `incomes`. Devolve quantas
+  /// receitas criou.
+  Future<int> generateDueRecurringIncomes({DateTime? now}) async {
+    final d = await _db;
+    final today = _dateOnly(now ?? DateTime.now());
+    final todayIdx = _ymIndex(today.year, today.month);
+
+    final rules = await d.query('recurring_incomes', where: 'active = 1');
+    var created = 0;
+
+    for (final r in rules) {
+      final id = r['id'] as int;
+      final amount = (r['amount'] as num).toDouble();
+      final source = (r['source'] as String?) ?? 'Outros';
+      final desc = (r['description'] as String?) ?? '';
+      final day = r['day_of_month'] as int;
+      final lastGen = r['last_generated'] as String?;
+
+      var (cy, cm) =
+          lastGen != null ? _ymAfter(lastGen) : (today.year, today.month);
+      String? newLast = lastGen;
+
+      while (_ymIndex(cy, cm) <= todayIdx) {
+        final isCurrent = cy == today.year && cm == today.month;
+        final dim = _daysInMonth(cy, cm);
+        final dd = day > dim ? dim : day;
+        if (isCurrent && today.day < dd) break;
+
+        await d.insert('incomes', {
+          'amount': amount,
+          'source': source,
+          'description': desc,
+          'received_on': _isoDate(DateTime(cy, cm, dd)),
+        });
+        created++;
+        newLast = _ymOf(cy, cm);
+
+        cm += 1;
+        if (cm > 12) {
+          cm = 1;
+          cy += 1;
+        }
+      }
+
+      if (newLast != lastGen) {
+        await d.update('recurring_incomes', {'last_generated': newLast},
+            where: 'id = ?', whereArgs: [id]);
+      }
+    }
+    return created;
+  }
+
+  // ------------------------------------------------------------------ //
+  // Definições e saldo
+  // ------------------------------------------------------------------ //
+  Future<String?> getSetting(String key) async {
+    final d = await _db;
+    final rows =
+        await d.query('settings', where: 'key = ?', whereArgs: [key], limit: 1);
+    return rows.isEmpty ? null : rows.first['value'] as String?;
+  }
+
+  Future<void> setSetting(String key, String value) async {
+    final d = await _db;
+    await d.insert('settings', {'key': key, 'value': value},
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  /// (valor inicial, data inicial). Por defeito (0, null).
+  Future<(double, DateTime?)> getOpeningBalance() async {
+    final amountRaw = await getSetting('opening_balance');
+    final dateRaw = await getSetting('opening_balance_date');
+    final amount = amountRaw == null ? 0.0 : double.tryParse(amountRaw) ?? 0.0;
+    final date = dateRaw == null ? null : DateTime.tryParse(dateRaw);
+    return (amount, date);
+  }
+
+  Future<void> setOpeningBalance(double amount, DateTime date) async {
+    await setSetting('opening_balance', amount.toString());
+    await setSetting('opening_balance_date', _isoDate(_dateOnly(date)));
+  }
+
+  /// Saldo atual = valor inicial + receitas − despesas, da data inicial até hoje.
+  /// Itens com data futura não contam.
+  Future<double> currentBalance({DateTime? now}) async {
+    final d = await _db;
+    final today = _isoDate(_dateOnly(now ?? DateTime.now()));
+    final (opening, since) = await getOpeningBalance();
+    final sinceIso = since == null ? null : _isoDate(_dateOnly(since));
+
+    final incWhere = sinceIso == null
+        ? 'received_on <= ?'
+        : 'received_on >= ? AND received_on <= ?';
+    final incArgs = sinceIso == null ? [today] : [sinceIso, today];
+    final expWhere = sinceIso == null
+        ? 'spent_on <= ?'
+        : 'spent_on >= ? AND spent_on <= ?';
+    final expArgs = sinceIso == null ? [today] : [sinceIso, today];
+
+    final inc = Sqflite.firstIntValue(await d.rawQuery(
+            'SELECT CAST(ROUND(COALESCE(SUM(amount),0)*100) AS INTEGER) FROM incomes WHERE $incWhere',
+            incArgs)) ??
+        0;
+    final exp = Sqflite.firstIntValue(await d.rawQuery(
+            'SELECT CAST(ROUND(COALESCE(SUM(amount),0)*100) AS INTEGER) FROM expenses WHERE $expWhere',
+            expArgs)) ??
+        0;
+    return opening + (inc - exp) / 100.0;
+  }
+
+  Future<double> netForMonth(int year, int month) async {
+    final inc = await incomeTotalForMonth(year, month);
+    final exp = await totalForMonth(year, month);
+    return inc - exp;
   }
 }

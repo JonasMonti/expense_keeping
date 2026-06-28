@@ -23,6 +23,34 @@ def money_html(value: float, big: bool = False) -> str:
     )
 
 
+def signed_money_html(value: float) -> str:
+    """Valor com sinal explícito (+/−) para o líquido do mês. Sem vermelho:
+    negativo usa tinta neutra, positivo o acento esmeralda."""
+    sign = "+" if value > 0 else ("−" if value < 0 else "")
+    cls = "amount num pos" if value > 0 else "amount num"
+    return (
+        f'<span class="{cls}">{sign}{fmt_number(abs(value))}'
+        f'<span class="cur">{CURRENCY}</span></span>'
+    )
+
+
+# Paleta esmeralda/terrosa para as origens de receita (não usamos vermelho).
+SOURCE_PALETTE = ["#0F7B66", "#2E9E86", "#6BCB77", "#4D96FF", "#9B5DE5", "#FF9F45", "#888888"]
+
+
+def source_donut_rows(rows: list[dict]) -> list[dict]:
+    """Converte incomes_by_source (source/total) no formato do donut_by_category."""
+    return [
+        {
+            "category": r["source"],
+            "color": SOURCE_PALETTE[i % len(SOURCE_PALETTE)],
+            "icon": "💶",
+            "total": r["total"],
+        }
+        for i, r in enumerate(rows)
+    ]
+
+
 # --------------------------------------------------------------------------- #
 # Tema
 # --------------------------------------------------------------------------- #
@@ -87,6 +115,17 @@ h1{ font-size:1.9rem; margin-bottom:.2rem; }
   font-variant-numeric:tabular-nums; }
 .amount .cur{ font-size:.55em; color:var(--muted); font-weight:500; margin-left:.18em; }
 .amount-lg{ font-size:3rem; line-height:1.05; display:inline-block; }
+
+/* ---- saldo ---- */
+.balance{ background:var(--accent); border:none; color:#fff; margin-bottom:1.1rem; }
+.balance .eyebrow{ color:rgba(255,255,255,.75); }
+.balance .amount{ color:#fff; }
+.balance .amount .cur{ color:rgba(255,255,255,.7); }
+.balance .balance-sub{ margin-top:.6rem; color:rgba(255,255,255,.85); font-size:.9rem; }
+
+/* valor líquido positivo destacado a acento (negativo fica em tinta neutra) */
+.amount.pos{ color:var(--accent); }
+.amount.pos .cur{ color:var(--accent); }
 
 /* ---- hero ---- */
 .hero{ margin-bottom:1.1rem; }
@@ -158,6 +197,18 @@ def hero(label: str, total: float, stats: list[str]) -> None:
         f'<div class="eyebrow">{html.escape(label)}</div>'
         f"{money_html(total, big=True)}"
         f'<div class="hero-sub">{bits}</div>'
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def balance_card(amount: float, sub: str) -> None:
+    """Cartão de destaque com o saldo atual (quanto tens agora)."""
+    st.markdown(
+        f'<div class="balance card">'
+        f'<div class="eyebrow">Saldo atual</div>'
+        f"{money_html(amount, big=True)}"
+        f'<div class="balance-sub">{html.escape(sub)}</div>'
         f"</div>",
         unsafe_allow_html=True,
     )

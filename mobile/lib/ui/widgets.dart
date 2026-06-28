@@ -191,6 +191,180 @@ class CategoryBars extends StatelessWidget {
   }
 }
 
+/// Cartão de destaque com o saldo atual (quanto tens agora). Fundo esmeralda.
+class BalanceCard extends StatelessWidget {
+  final double amount;
+  final String sub;
+  const BalanceCard({super.key, required this.amount, required this.sub});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+        decoration: BoxDecoration(
+          color: AppColors.accent,
+          borderRadius: const BorderRadius.all(Radius.circular(18)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('SALDO ATUAL',
+                style: TextStyle(
+                  fontFamily: kBody,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.9,
+                  color: Colors.white.withAlpha(0xBF),
+                )),
+            const SizedBox(height: 8),
+            RichText(
+              text: TextSpan(
+                text: fmtNumber(amount),
+                style: display(40, color: Colors.white),
+                children: [
+                  TextSpan(
+                    text: ' $kCurrency',
+                    style: display(22,
+                        color: Colors.white.withAlpha(0xB3),
+                        weight: FontWeight.w500),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(sub,
+                style: TextStyle(
+                    fontFamily: kBody,
+                    fontSize: 12.5,
+                    color: Colors.white.withAlpha(0xD9))),
+          ],
+        ),
+      );
+}
+
+/// Fila de 3 KPIs (Receitas / Despesas / Líquido do mês).
+class KpiRow extends StatelessWidget {
+  final double income;
+  final double expense;
+  const KpiRow({super.key, required this.income, required this.expense});
+
+  @override
+  Widget build(BuildContext context) {
+    final net = income - expense;
+    return Row(
+      children: [
+        Expanded(child: _kpi('Receitas', fmtMoney(income), AppColors.ink)),
+        const SizedBox(width: 10),
+        Expanded(child: _kpi('Despesas', fmtMoney(expense), AppColors.ink)),
+        const SizedBox(width: 10),
+        Expanded(
+            child: _kpi('Líquido', _signed(net),
+                net > 0 ? AppColors.accent : AppColors.ink)),
+      ],
+    );
+  }
+
+  static String _signed(double v) {
+    final s = v > 0 ? '+' : (v < 0 ? '−' : '');
+    return '$s${fmtMoney(v.abs())}';
+  }
+
+  Widget _kpi(String label, String value, Color valueColor) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: cardDecoration,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label.toUpperCase(),
+                style: TextStyle(
+                    fontFamily: kBody,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.6,
+                    color: AppColors.faint)),
+            const SizedBox(height: 6),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(value, style: display(16, color: valueColor)),
+            ),
+          ],
+        ),
+      );
+}
+
+/// Paleta esmeralda/terrosa para as origens de receita (sem vermelho), e
+/// conversão de [SourceTotal] para o formato dos gráficos de categoria.
+const List<String> kSourcePalette = [
+  '#0F7B66', '#2E9E86', '#6BCB77', '#4D96FF', '#9B5DE5', '#FF9F45', '#888888',
+];
+
+List<CategoryTotal> sourceTotalsToCategory(List<SourceTotal> rows) => [
+      for (var i = 0; i < rows.length; i++)
+        CategoryTotal(
+          category: rows[i].source,
+          color: kSourcePalette[i % kSourcePalette.length],
+          icon: '💶',
+          total: rows[i].total,
+        ),
+    ];
+
+/// Linha de receita no histórico (espelha [ExpenseRow], chip esmeralda).
+class IncomeRow extends StatelessWidget {
+  final IncomeView i;
+  const IncomeRow(this.i, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 4),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 84,
+            child: Text(
+              fmtDate(i.receivedOn),
+              style: TextStyle(
+                  fontFamily: kBody,
+                  fontSize: 12.5,
+                  color: AppColors.faint,
+                  fontFeatures: const [FontFeature.tabularFigures()]),
+            ),
+          ),
+          const CategoryChip(icon: '💶', color: '#0F7B66', size: 34),
+          const SizedBox(width: 12),
+          Expanded(
+            child: RichText(
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              text: TextSpan(
+                style: const TextStyle(fontFamily: kBody, fontSize: 14.5),
+                children: [
+                  TextSpan(
+                    text: i.source,
+                    style: TextStyle(
+                        color: AppColors.ink, fontWeight: FontWeight.w500),
+                  ),
+                  if (i.description.isNotEmpty)
+                    TextSpan(
+                      text: ' — ${i.description}',
+                      style: TextStyle(color: AppColors.muted, fontSize: 13),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(fmtMoney(i.amount), style: display(15)),
+        ],
+      ),
+    );
+  }
+}
+
 /// Chip de emoji com fundo tingido pela cor da categoria (≈ color + "22").
 class CategoryChip extends StatelessWidget {
   final String icon;

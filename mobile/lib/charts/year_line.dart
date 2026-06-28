@@ -9,20 +9,28 @@ import '../ui/format.dart';
 import '../ui/theme.dart';
 
 class YearLineChart extends StatelessWidget {
-  final List<MonthTotal> rows; // 12 meses (Jan→Dez)
+  final List<MonthTotal> rows; // despesas por mês (Jan→Dez)
   final int highlightMonth; // mês selecionado, marcador maior
+  final List<MonthTotal>? incomeRows; // receitas por mês (opcional, 2ª linha)
   const YearLineChart({
     super.key,
     required this.rows,
     required this.highlightMonth,
+    this.incomeRows,
   });
 
   @override
   Widget build(BuildContext context) {
-    final maxY = rows.fold<double>(0, (m, r) => r.total > m ? r.total : m);
+    var maxY = rows.fold<double>(0, (m, r) => r.total > m ? r.total : m);
+    if (incomeRows != null) {
+      maxY = incomeRows!.fold<double>(maxY, (m, r) => r.total > m ? r.total : m);
+    }
     final spots = [
       for (final r in rows) FlSpot((r.month - 1).toDouble(), r.total),
     ];
+    final incomeSpots = incomeRows == null
+        ? null
+        : [for (final r in incomeRows!) FlSpot((r.month - 1).toDouble(), r.total)];
 
     return SizedBox(
       height: 220,
@@ -68,12 +76,16 @@ class YearLineChart extends StatelessWidget {
             touchTooltipData: LineTouchTooltipData(
               getTooltipColor: (_) => AppColors.surface,
               tooltipBorder: BorderSide(color: AppColors.border),
-              getTooltipItems: (spots) => spots
-                  .map((s) => LineTooltipItem(
-                        '${mesesCurtoPt[s.x.round()]}\n${fmtMoney(s.y)}',
-                        display(13),
-                      ))
-                  .toList(),
+              getTooltipItems: (spots) => spots.map((s) {
+                // barIndex 0 = despesas, 1 = receitas (quando há 2ª linha).
+                final prefix = incomeSpots == null
+                    ? ''
+                    : (s.barIndex == 0 ? 'Despesas ' : 'Receitas ');
+                return LineTooltipItem(
+                  '${mesesCurtoPt[s.x.round()]}\n$prefix${fmtMoney(s.y)}',
+                  display(13),
+                );
+              }).toList(),
             ),
           ),
           lineBarsData: [
@@ -100,6 +112,17 @@ class YearLineChart extends StatelessWidget {
                 color: AppColors.accent.withAlpha(31), // ~.12
               ),
             ),
+            if (incomeSpots != null)
+              LineChartBarData(
+                spots: incomeSpots,
+                isCurved: true,
+                preventCurveOverShooting: true,
+                color: AppColors.ink,
+                barWidth: 2,
+                dashArray: const [5, 4],
+                dotData: const FlDotData(show: false),
+                belowBarData: BarAreaData(show: false),
+              ),
           ],
         ),
       ),
