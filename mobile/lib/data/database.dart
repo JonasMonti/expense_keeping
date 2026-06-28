@@ -29,7 +29,7 @@ class AppDatabase {
     final path = p.join(dir, 'expenses.db');
     return openDatabase(
       path,
-      version: 2,
+      version: 3,
       onConfigure: (d) => d.execute('PRAGMA foreign_keys = ON'),
       onCreate: createSchema,
       onUpgrade: upgradeSchema,
@@ -49,6 +49,9 @@ class AppDatabase {
     if (oldVersion < 2) {
       await _createRecurring(d);
     }
+    if (oldVersion < 3) {
+      await _createIncomeTables(d);
+    }
   }
 
   /// Tabela de despesas recorrentes (usada por [_create] e por [upgradeSchema]).
@@ -63,6 +66,41 @@ class AppDatabase {
         active         INTEGER NOT NULL DEFAULT 1,
         last_generated TEXT,
         created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    ''');
+  }
+
+  /// Tabelas de receitas, receitas recorrentes e definições (chave/valor).
+  /// Usadas por [_create] e pela migração v2→v3. A receita usa `source` (origem,
+  /// ex. "Ordenado") em vez de uma FK de categoria.
+  static Future<void> _createIncomeTables(Database d) async {
+    await d.execute('''
+      CREATE TABLE incomes (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        amount      REAL NOT NULL,
+        source      TEXT NOT NULL DEFAULT 'Outros',
+        description TEXT NOT NULL DEFAULT '',
+        received_on TEXT NOT NULL,
+        created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    ''');
+    await d.execute('CREATE INDEX idx_inc_date ON incomes(received_on)');
+    await d.execute('''
+      CREATE TABLE recurring_incomes (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        amount         REAL NOT NULL,
+        source         TEXT NOT NULL DEFAULT 'Outros',
+        description    TEXT NOT NULL DEFAULT '',
+        day_of_month   INTEGER NOT NULL,
+        active         INTEGER NOT NULL DEFAULT 1,
+        last_generated TEXT,
+        created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    ''');
+    await d.execute('''
+      CREATE TABLE settings (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL DEFAULT ''
       )
     ''');
   }
@@ -89,6 +127,7 @@ class AppDatabase {
     await d.execute('CREATE INDEX idx_exp_date ON expenses(spent_on)');
     await d.execute('CREATE INDEX idx_exp_cat ON expenses(category_id)');
     await _createRecurring(d);
+    await _createIncomeTables(d);
 
     final batch = d.batch();
     for (final (name, color, icon) in defaultCategories) {

@@ -48,3 +48,56 @@ class Expense(Base):
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"<Expense {self.amount} {self.spent_on}>"
+
+
+class Income(Base):
+    """Entrada de dinheiro (espelha Expense). A `source` faz o papel da categoria."""
+
+    __tablename__ = "incomes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    # Origem da receita, ex. "Ordenado", "Subsídio de alimentação".
+    source: Mapped[str] = mapped_column(String(80), default="Outros")
+    description: Mapped[str] = mapped_column(String(255), default="")
+    received_on: Mapped[dt.date] = mapped_column(Date, nullable=False, index=True)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime, server_default=func.now()
+    )
+
+    def __repr__(self) -> str:  # pragma: no cover
+        return f"<Income {self.amount} {self.received_on}>"
+
+
+class RecurringIncome(Base):
+    """Receita recorrente (ordenado, subsídio…). Gera uma receita por mês, no dia
+    `day_of_month`, enquanto estiver `active`. Espelha a tabela `recurring` do mobile."""
+
+    __tablename__ = "recurring_incomes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    source: Mapped[str] = mapped_column(String(80), default="Outros")
+    description: Mapped[str] = mapped_column(String(255), default="")
+    day_of_month: Mapped[int] = mapped_column(nullable=False)
+    active: Mapped[bool] = mapped_column(default=True)
+    # Último mês já materializado, no formato 'YYYY-MM' (None = ainda nenhum).
+    last_generated: Mapped[str | None] = mapped_column(String(7), default=None)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime, server_default=func.now()
+    )
+
+    def __repr__(self) -> str:  # pragma: no cover
+        return f"<RecurringIncome {self.amount} dia {self.day_of_month}>"
+
+
+class AppSetting(Base):
+    """Definições chave/valor (saldo inicial, data do saldo inicial…)."""
+
+    __tablename__ = "settings"
+
+    key: Mapped[str] = mapped_column(String(50), primary_key=True)
+    value: Mapped[str] = mapped_column(String(255), default="")
+
+    def __repr__(self) -> str:  # pragma: no cover
+        return f"<AppSetting {self.key}={self.value!r}>"
