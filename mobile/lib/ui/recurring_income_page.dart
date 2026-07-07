@@ -5,7 +5,7 @@
 /// Espelha [RecurringPage], mas com `source` (origem) em vez de categoria.
 library;
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Card;
 import 'package:flutter/services.dart';
 
 import '../data/repository.dart';
@@ -25,6 +25,7 @@ class RecurringIncomePage extends StatefulWidget {
 
 class _RecurringIncomePageState extends State<RecurringIncomePage> {
   List<RecurringIncome> _rules = [];
+  List<Card> _cards = [];
   bool _changed = false;
 
   @override
@@ -35,7 +36,13 @@ class _RecurringIncomePageState extends State<RecurringIncomePage> {
 
   Future<void> _load() async {
     final rules = await widget.repo.listRecurringIncomes();
-    if (mounted) setState(() => _rules = rules);
+    final cards = await widget.repo.listCards();
+    if (mounted) {
+      setState(() {
+        _rules = rules;
+        _cards = cards;
+      });
+    }
   }
 
   @override
@@ -193,7 +200,8 @@ class _RecurringIncomePageState extends State<RecurringIncomePage> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
-      builder: (_) => _RecurringIncomeEditor(repo: widget.repo, existing: existing),
+      builder: (_) => _RecurringIncomeEditor(
+          repo: widget.repo, cards: _cards, existing: existing),
     );
     if (saved == true) {
       _changed = true;
@@ -204,8 +212,10 @@ class _RecurringIncomePageState extends State<RecurringIncomePage> {
 
 class _RecurringIncomeEditor extends StatefulWidget {
   final Repository repo;
+  final List<Card> cards;
   final RecurringIncome? existing;
-  const _RecurringIncomeEditor({required this.repo, this.existing});
+  const _RecurringIncomeEditor(
+      {required this.repo, required this.cards, this.existing});
 
   @override
   State<_RecurringIncomeEditor> createState() => _RecurringIncomeEditorState();
@@ -215,6 +225,7 @@ class _RecurringIncomeEditorState extends State<_RecurringIncomeEditor> {
   late final TextEditingController _amountCtrl;
   late final TextEditingController _descCtrl;
   late String _source;
+  int? _cardId;
   late int _day;
   late bool _active;
   String? _error;
@@ -233,6 +244,8 @@ class _RecurringIncomeEditorState extends State<_RecurringIncomeEditor> {
     _active = e?.active ?? true;
     final wanted = e?.source ?? kIncomeSources.first;
     _source = kIncomeSources.contains(wanted) ? wanted : kIncomeSources.first;
+    final wantedCard = e?.cardId;
+    _cardId = widget.cards.any((c) => c.id == wantedCard) ? wantedCard : null;
   }
 
   @override
@@ -256,6 +269,7 @@ class _RecurringIncomeEditorState extends State<_RecurringIncomeEditor> {
       description: _descCtrl.text.trim(),
       dayOfMonth: _day,
       active: _active,
+      cardId: _cardId,
     );
     if (_isEditing) {
       await widget.repo.updateRecurringIncome(rule);
@@ -313,6 +327,20 @@ class _RecurringIncomeEditorState extends State<_RecurringIncomeEditor> {
             ],
             onChanged: (s) => setState(() => _source = s!),
           ),
+          if (widget.cards.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            DropdownButtonFormField<int?>(
+              initialValue: _cardId,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Carregar cartão'),
+              items: [
+                const DropdownMenuItem(value: null, child: Text('— Sem cartão —')),
+                for (final c in widget.cards)
+                  DropdownMenuItem(value: c.id, child: Text('${c.icon} ${c.name}')),
+              ],
+              onChanged: (v) => setState(() => _cardId = v),
+            ),
+          ],
           const SizedBox(height: 14),
           DropdownButtonFormField<int>(
             initialValue: _day,

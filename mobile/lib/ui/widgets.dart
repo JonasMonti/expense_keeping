@@ -353,6 +353,11 @@ class IncomeRow extends StatelessWidget {
                       text: ' — ${i.description}',
                       style: TextStyle(color: AppColors.muted, fontSize: 13),
                     ),
+                  if (i.cardName != null)
+                    TextSpan(
+                      text: '  ${i.cardIcon ?? '💳'} ${i.cardName}',
+                      style: TextStyle(color: AppColors.faint, fontSize: 12),
+                    ),
                 ],
               ),
             ),
@@ -360,6 +365,83 @@ class IncomeRow extends StatelessWidget {
           const SizedBox(width: 10),
           Text(fmtMoney(i.amount), style: display(15)),
         ],
+      ),
+    );
+  }
+}
+
+/// Secção de saldos por cartão (carteiras). Mostra um cartão por cada meio de
+/// pagamento com movimentos, com uma faixa na cor do cartão, o ícone, o nome e
+/// o saldo em destaque. O saldo nunca aparece a vermelho (identidade da app).
+class CardBalancesSection extends StatelessWidget {
+  final List<CardBalance> cards;
+  const CardBalancesSection(this.cards, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        for (final c in cards)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _walletCard(c),
+          ),
+      ],
+    );
+  }
+
+  Widget _walletCard(CardBalance c) {
+    return Container(
+      decoration: cardDecoration,
+      clipBehavior: Clip.antiAlias,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Faixa de acento na cor do cartão.
+            Container(width: 5, color: hexColor(c.color)),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 12, 16, 12),
+                child: Row(
+                  children: [
+                    CategoryChip(icon: c.icon, color: c.color, size: 38),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            c.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontFamily: kBody,
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w500),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Carregado ${fmtMoney(c.opening + c.incomes)} · '
+                            'gasto ${fmtMoney(c.expenses)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontFamily: kBody,
+                                fontSize: 12,
+                                color: AppColors.muted),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(fmtMoney(c.balance), style: display(17)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -434,6 +516,11 @@ class ExpenseRow extends StatelessWidget {
                       text: ' — ${e.description}',
                       style: TextStyle(
                           color: AppColors.muted, fontSize: 13),
+                    ),
+                  if (e.cardName != null)
+                    TextSpan(
+                      text: '  ${e.cardIcon ?? '💳'} ${e.cardName}',
+                      style: TextStyle(color: AppColors.faint, fontSize: 12),
                     ),
                 ],
               ),

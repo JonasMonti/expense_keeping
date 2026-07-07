@@ -37,12 +37,83 @@ class Category {
       );
 }
 
+/// Cartão / meio de pagamento (subsídio de alimentação, débito, dinheiro…).
+/// Funciona como carteira: saldo = saldo inicial + carregamentos − despesas.
+class Card {
+  final int? id;
+  final String name;
+  final String color; // hex
+  final String icon; // emoji
+  final double openingBalance;
+
+  const Card({
+    this.id,
+    required this.name,
+    this.color = '#0F7B66',
+    this.icon = '💳',
+    this.openingBalance = 0.0,
+  });
+
+  factory Card.fromMap(Map<String, Object?> m) => Card(
+        id: m['id'] as int?,
+        name: m['name'] as String,
+        color: (m['color'] as String?) ?? '#0F7B66',
+        icon: (m['icon'] as String?) ?? '💳',
+        openingBalance: (m['opening_balance'] as num?)?.toDouble() ?? 0.0,
+      );
+
+  Map<String, Object?> toMap() => {
+        if (id != null) 'id': id,
+        'name': name,
+        'color': color,
+        'icon': icon,
+        'opening_balance': openingBalance,
+      };
+
+  Card copyWith(
+          {int? id,
+          String? name,
+          String? color,
+          String? icon,
+          double? openingBalance}) =>
+      Card(
+        id: id ?? this.id,
+        name: name ?? this.name,
+        color: color ?? this.color,
+        icon: icon ?? this.icon,
+        openingBalance: openingBalance ?? this.openingBalance,
+      );
+}
+
+/// Saldo atual de um cartão (para a secção de carteiras na home).
+class CardBalance {
+  final int id;
+  final String name;
+  final String color;
+  final String icon;
+  final double opening;
+  final double incomes;
+  final double expenses;
+  double get balance => opening + incomes - expenses;
+
+  const CardBalance({
+    required this.id,
+    required this.name,
+    required this.color,
+    required this.icon,
+    required this.opening,
+    required this.incomes,
+    required this.expenses,
+  });
+}
+
 class Expense {
   final int? id;
   final double amount;
   final String description;
   final DateTime spentOn; // só data (sem hora)
   final int categoryId;
+  final int? cardId; // cartão usado (opcional)
 
   const Expense({
     this.id,
@@ -50,6 +121,7 @@ class Expense {
     this.description = '',
     required this.spentOn,
     required this.categoryId,
+    this.cardId,
   });
 
   Map<String, Object?> toMap() => {
@@ -59,6 +131,7 @@ class Expense {
         // guardado como ISO yyyy-MM-dd, igual ao SQLite Date do projeto original
         'spent_on': _isoDate(spentOn),
         'category_id': categoryId,
+        'card_id': cardId,
       };
 }
 
@@ -72,6 +145,9 @@ class ExpenseView {
   final String category;
   final String color;
   final String icon;
+  final int? cardId;
+  final String? cardName;
+  final String? cardIcon;
 
   const ExpenseView({
     required this.id,
@@ -82,6 +158,9 @@ class ExpenseView {
     required this.category,
     required this.color,
     required this.icon,
+    this.cardId,
+    this.cardName,
+    this.cardIcon,
   });
 
   factory ExpenseView.fromMap(Map<String, Object?> m) => ExpenseView(
@@ -93,6 +172,9 @@ class ExpenseView {
         category: m['category'] as String,
         color: m['color'] as String,
         icon: m['icon'] as String,
+        cardId: m['card_id'] as int?,
+        cardName: m['card_name'] as String?,
+        cardIcon: m['card_icon'] as String?,
       );
 
   /// Converte para [Expense] (para gravar alterações na edição).
@@ -102,6 +184,7 @@ class ExpenseView {
         description: description,
         spentOn: spentOn,
         categoryId: categoryId,
+        cardId: cardId,
       );
 }
 
@@ -114,6 +197,7 @@ class Recurring {
   final int categoryId;
   final int dayOfMonth; // 1..31 (ajustado ao tamanho do mês na geração)
   final bool active;
+  final int? cardId; // cartão debitado pelas despesas geradas (opcional)
 
   /// Último mês já materializado, no formato 'yyyy-MM' (null = ainda nenhum).
   final String? lastGenerated;
@@ -125,6 +209,7 @@ class Recurring {
     required this.categoryId,
     required this.dayOfMonth,
     this.active = true,
+    this.cardId,
     this.lastGenerated,
   });
 }
@@ -137,6 +222,7 @@ class RecurringView {
   final int categoryId;
   final int dayOfMonth;
   final bool active;
+  final int? cardId;
   final String category;
   final String color;
   final String icon;
@@ -148,6 +234,7 @@ class RecurringView {
     required this.categoryId,
     required this.dayOfMonth,
     required this.active,
+    this.cardId,
     required this.category,
     required this.color,
     required this.icon,
@@ -160,6 +247,7 @@ class RecurringView {
         categoryId: m['category_id'] as int,
         dayOfMonth: m['day_of_month'] as int,
         active: (m['active'] as int? ?? 1) == 1,
+        cardId: m['card_id'] as int?,
         category: m['category'] as String,
         color: m['color'] as String,
         icon: m['icon'] as String,
@@ -173,6 +261,7 @@ class Income {
   final String source; // origem, ex. "Ordenado"
   final String description;
   final DateTime receivedOn; // só data (sem hora)
+  final int? cardId; // cartão carregado por esta receita (opcional)
 
   const Income({
     this.id,
@@ -180,6 +269,7 @@ class Income {
     this.source = 'Outros',
     this.description = '',
     required this.receivedOn,
+    this.cardId,
   });
 
   Map<String, Object?> toMap() => {
@@ -188,6 +278,7 @@ class Income {
         'source': source,
         'description': description,
         'received_on': _isoDate(receivedOn),
+        'card_id': cardId,
       };
 }
 
@@ -198,6 +289,9 @@ class IncomeView {
   final double amount;
   final String source;
   final String description;
+  final int? cardId;
+  final String? cardName;
+  final String? cardIcon;
 
   const IncomeView({
     required this.id,
@@ -205,6 +299,9 @@ class IncomeView {
     required this.amount,
     required this.source,
     required this.description,
+    this.cardId,
+    this.cardName,
+    this.cardIcon,
   });
 
   factory IncomeView.fromMap(Map<String, Object?> m) => IncomeView(
@@ -213,6 +310,9 @@ class IncomeView {
         amount: (m['amount'] as num).toDouble(),
         source: (m['source'] as String?) ?? 'Outros',
         description: (m['description'] as String?) ?? '',
+        cardId: m['card_id'] as int?,
+        cardName: m['card_name'] as String?,
+        cardIcon: m['card_icon'] as String?,
       );
 
   Income toIncome() => Income(
@@ -221,6 +321,7 @@ class IncomeView {
         source: source,
         description: description,
         receivedOn: receivedOn,
+        cardId: cardId,
       );
 }
 
@@ -233,6 +334,7 @@ class RecurringIncome {
   final String description;
   final int dayOfMonth; // 1..31 (ajustado ao tamanho do mês na geração)
   final bool active;
+  final int? cardId; // cartão carregado pelas receitas geradas (opcional)
 
   /// Último mês já materializado, no formato 'yyyy-MM' (null = ainda nenhum).
   final String? lastGenerated;
@@ -244,6 +346,7 @@ class RecurringIncome {
     this.description = '',
     required this.dayOfMonth,
     this.active = true,
+    this.cardId,
     this.lastGenerated,
   });
 
@@ -254,6 +357,7 @@ class RecurringIncome {
         description: (m['description'] as String?) ?? '',
         dayOfMonth: m['day_of_month'] as int,
         active: (m['active'] as int? ?? 1) == 1,
+        cardId: m['card_id'] as int?,
         lastGenerated: m['last_generated'] as String?,
       );
 }

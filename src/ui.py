@@ -150,6 +150,20 @@ h1{ font-size:1.9rem; margin-bottom:.2rem; }
 .track{ height:8px; border-radius:99px; background:var(--bg); overflow:hidden; }
 .fill{ height:100%; border-radius:99px; }
 
+/* ---- cartões (carteira) ---- */
+.card-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:.9rem; margin:.2rem 0 1.1rem; }
+.wallet{ position:relative; overflow:hidden; padding:1.1rem 1.2rem; }
+.wallet::before{ content:""; position:absolute; left:0; top:0; bottom:0; width:5px; background:var(--wallet-accent,#0F7B66); }
+.wallet .w-head{ display:flex; align-items:center; gap:.5rem; margin-bottom:.55rem; }
+.wallet .w-icon{ width:30px; height:30px; border-radius:9px; display:grid; place-items:center;
+  font-size:1rem; flex:none; background:var(--wallet-accent,#0F7B66)22; }
+.wallet .w-name{ font-weight:600; color:var(--ink); font-size:.9rem; line-height:1.15; }
+.wallet .w-bal{ font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:1.4rem;
+  color:var(--ink); font-variant-numeric:tabular-nums; }
+.wallet .w-bal.neg{ color:var(--muted); }
+.wallet .w-sub{ margin-top:.3rem; color:var(--faint); font-size:.76rem; font-variant-numeric:tabular-nums; }
+.card-tag{ color:var(--faint); font-size:.82rem; margin-left:.4rem; }
+
 /* ---- secção ---- */
 .section-title{ font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:1.05rem;
   color:var(--ink); margin:.4rem 0 .9rem; }
@@ -241,6 +255,29 @@ def category_list(rows: list[dict], total: float) -> None:
             f"</div>"
         )
     st.markdown(f'<div class="cat-list">{"".join(items)}</div>', unsafe_allow_html=True)
+
+
+def card_balance_grid(cards: list[dict]) -> None:
+    """Grelha com o saldo atual de cada cartão (carteira)."""
+    if not cards:
+        return
+    tiles = []
+    for c in cards:
+        neg = " neg" if c["balance"] < 0 else ""
+        sub = (f'Carregado {fmt_number(c["incomes"] + c["opening"])} · '
+               f'gasto {fmt_number(c["expenses"])}')
+        tiles.append(
+            f'<div class="wallet card" style="--wallet-accent:{c["color"]}">'
+            f'<div class="w-head">'
+            f'<span class="w-icon" style="background:{c["color"]}22">{c["icon"]}</span>'
+            f'<span class="w-name">{html.escape(c["name"])}</span></div>'
+            f'<div class="w-bal{neg}">{fmt_number(c["balance"])}'
+            f'<span class="cur" style="font-size:.55em;color:var(--muted);'
+            f'font-weight:500;margin-left:.18em">{CURRENCY}</span></div>'
+            f'<div class="w-sub">{sub}</div>'
+            f"</div>"
+        )
+    st.markdown(f'<div class="card-grid">{"".join(tiles)}</div>', unsafe_allow_html=True)
 
 
 def section(title: str) -> None:

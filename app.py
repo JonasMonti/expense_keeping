@@ -36,6 +36,32 @@ def category_lookup() -> dict[str, int]:
     return {f"{c.icon} {c.name}": c.id for c in repo.list_categories()}
 
 
+# Rótulo usado quando um movimento não tem cartão associado.
+SEM_CARTAO = "— Sem cartão —"
+
+
+def card_lookup() -> dict[str, int | None]:
+    """Mapa rótulo→id para os seletores de cartão. Inclui a opção «sem cartão»."""
+    cards = {f"{c.icon} {c.name}": c.id for c in repo.list_cards()}
+    return {SEM_CARTAO: None, **cards}
+
+
+def card_select(
+    label: str, current_id: int | None = None, key: str | None = None
+) -> int | None:
+    """Selectbox de cartão que devolve o id (ou None). Pré-seleciona `current_id`."""
+    opts = card_lookup()
+    labels = list(opts.keys())
+    index = 0
+    if current_id is not None:
+        for i, cid in enumerate(opts.values()):
+            if cid == current_id:
+                index = i
+                break
+    escolha = st.selectbox(label, labels, index=index, key=key)
+    return opts[escolha]
+
+
 def parse_valor(valor_str: str) -> Decimal | None:
     """'12,50' -> Decimal('12.50'); None se inválido."""
     try:
@@ -57,6 +83,7 @@ def dialog_add_expense() -> None:
     with st.form("nova_despesa", clear_on_submit=False):
         valor_str = st.text_input("Valor", placeholder="12,50")
         categoria = st.selectbox("Categoria", list(cats.keys()))
+        cartao_id = card_select("Cartão")
         data = st.date_input("Data", value=dt.date.today(), format="DD/MM/YYYY")
         descricao = st.text_input("Descrição", placeholder="opcional — ex: almoço")
         ok = st.form_submit_button("💾", use_container_width=True, type="primary")
@@ -70,7 +97,7 @@ def dialog_add_expense() -> None:
         if valor <= 0:
             st.error("O valor tem de ser maior que zero.")
             return
-        repo.add_expense(valor, cats[categoria], data, descricao)
+        repo.add_expense(valor, cats[categoria], data, descricao, card_id=cartao_id)
         st.rerun()
 
 
@@ -106,11 +133,49 @@ def dialog_categorias() -> None:
                 st.rerun()
 
 
+@st.dialog("Gerir cartões", width="large")
+def dialog_cards() -> None:
+    st.caption("Cada cartão é uma carteira: saldo = saldo inicial + receitas "
+               "atribuídas − despesas atribuídas.")
+    with st.form("novo_cartao", clear_on_submit=True):
+        c1, c2, c3, c4, c5 = st.columns([4, 1, 1, 2, 2], vertical_alignment="bottom")
+        nome = c1.text_input("Novo cartão")
+        icon = c2.text_input("Emoji", value="💳", max_chars=4)
+        cor = c3.color_picker("Cor", value="#0F7B66")
+        saldo_str = c4.text_input("Saldo inicial", value="0")
+        if c5.form_submit_button("➕", use_container_width=True, type="primary") and nome.strip():
+            saldo = parse_valor(saldo_str) or Decimal("0")
+            repo.add_card(nome, cor, icon, float(saldo))
+            st.rerun()
+
+    st.divider()
+    for card in repo.list_cards():
+        c1, c2, c3, c4, c5 = st.columns([1, 4, 2, 2, 1], vertical_alignment="center")
+        c1.markdown(
+            f'<div class="exp-chip" style="background:{card.color}22">{card.icon}</div>',
+            unsafe_allow_html=True,
+        )
+        novo_nome = c2.text_input("Nome", value=card.name, key=f"cn_{card.id}", label_visibility="collapsed")
+        novo_saldo = c3.text_input("Saldo inicial", value=ui.fmt_number(float(card.opening_balance)),
+                                   key=f"cb_{card.id}", label_visibility="collapsed")
+        if c4.button("💾", key=f"cs_{card.id}", use_container_width=True, help="Guardar"):
+            saldo = parse_valor(novo_saldo) or Decimal("0")
+            repo.update_card(card.id, novo_nome, card.color, card.icon, float(saldo))
+            st.rerun()
+        if c5.button("🗑️", key=f"cd_{card.id}", help="Eliminar"):
+            if repo.card_has_movements(card.id):
+                st.warning(f"«{card.name}» tem movimentos associados e não pode ser eliminado.")
+            else:
+                repo.delete_card(card.id)
+                st.rerun()
+
+
 @st.dialog("Registar receita")
 def dialog_add_income() -> None:
     with st.form("nova_receita", clear_on_submit=False):
         valor_str = st.text_input("Valor", placeholder="1500,00")
         fonte = st.selectbox("Origem", FONTES_RECEITA)
+        cartao_id = card_select("Carregar cartão")
         data = st.date_input("Data", value=dt.date.today(), format="DD/MM/YYYY")
         descricao = st.text_input("Descrição", placeholder="opcional — ex: prémio")
         ok = st.form_submit_button("💾", use_container_width=True, type="primary")
@@ -123,7 +188,7 @@ def dialog_add_income() -> None:
         if valor <= 0:
             st.error("O valor tem de ser maior que zero.")
             return
-        repo.add_income(valor, fonte, data, descricao)
+        repo.add_income(valor, fonte, data, descricao, card_id=cartao_id)
         st.rerun()
 
 
@@ -158,12 +223,14 @@ def dialog_settings() -> None:
         v_str = c1.text_input("Valor")
         fonte = c2.selectbox("Origem", FONTES_RECEITA)
         dia = c3.number_input("Dia", min_value=1, max_value=31, value=1, step=1)
-        if c4.form_submit_button("➕", use_container_width=True, type="primary"):
+        submit_rec = c4.form_submit_button("➕", use_container_width=True, type="primary")
+        cartao_id = card_select("Carregar cartão", key="rec_card")
+        if submit_rec:
             valor = parse_valor(v_str)
             if valor is None or valor <= 0:
                 st.error("Valor inválido.")
             else:
-                repo.add_recurring_income(valor, fonte, int(dia))
+                repo.add_recurring_income(valor, fonte, int(dia), card_id=cartao_id)
                 st.rerun()
 
     for r in repo.list_recurring_incomes():
@@ -182,7 +249,7 @@ def dialog_settings() -> None:
         if c3.button(novo_estado, key=f"ri_t_{r['id']}", use_container_width=True):
             repo.update_recurring_income(r["id"], Decimal(str(r["amount"])), r["source"],
                                          r["day_of_month"], r["description"],
-                                         not r["active"])
+                                         not r["active"], card_id=r["card_id"])
             st.rerun()
         if c4.button("🗑️", key=f"ri_d_{r['id']}", help="Eliminar"):
             repo.delete_recurring_income(r["id"])
@@ -198,8 +265,8 @@ def header() -> tuple[int, int]:
     if hoje.year not in anos:
         anos = sorted(set(anos + [hoje.year]), reverse=True)
 
-    titulo, sel_mes, sel_ano, b_add, b_inc, b_cat, b_set = st.columns(
-        [5, 2, 1.3, 1, 1, 1, 1], vertical_alignment="bottom"
+    titulo, sel_mes, sel_ano, b_add, b_inc, b_card, b_cat, b_set = st.columns(
+        [5, 2, 1.3, 1, 1, 1, 1, 1], vertical_alignment="bottom"
     )
     titulo.markdown(
         '<div class="brand"><span class="dot">€</span> As Minhas Finanças</div>',
@@ -217,6 +284,8 @@ def header() -> tuple[int, int]:
         dialog_add_expense()
     if b_inc.button("➕", use_container_width=True, help="Nova receita"):
         dialog_add_income()
+    if b_card.button("💳", use_container_width=True, help="Gerir cartões"):
+        dialog_cards()
     if b_cat.button("🏷️", use_container_width=True, help="Gerir categorias"):
         dialog_categorias()
     if b_set.button("⚙️", use_container_width=True, help="Definições · saldo e recorrentes"):
@@ -257,6 +326,15 @@ def dashboard(ano: int, mes: int) -> None:
         ("Despesas do mês", ui.money_html(total)),
         ("Líquido do mês", ui.signed_money_html(liquido)),
     ])
+
+    # ---- saldo por cartão (carteiras) ----
+    cartoes = [
+        c for c in repo.card_balances()
+        if c["opening"] or c["incomes"] or c["expenses"]
+    ]
+    if cartoes:
+        ui.section("Saldo por cartão")
+        ui.card_balance_grid(cartoes)
 
     # ---- evolução do ano inteiro (receitas vs despesas) ----
     if year_sum > 0 or year_inc_sum > 0:
@@ -311,11 +389,13 @@ def historico(despesas: list[dict]) -> None:
     for d in despesas:
         row, btn = st.columns([10, 1], vertical_alignment="center")
         desc = f'<span class="exp-desc"> — {html.escape(d["description"])}</span>' if d["description"] else ""
+        tag = (f'<span class="card-tag">{d["card_icon"]} {html.escape(d["card"])}</span>'
+               if d.get("card") else "")
         row.markdown(
             f'<div class="exp-row">'
             f'<span class="exp-date">{d["spent_on"].strftime("%d/%m/%Y")}</span>'
             f'<span class="exp-chip" style="background:{d["color"]}22">{d["icon"]}</span>'
-            f'<span class="exp-main"><span class="exp-cat">{html.escape(d["category"])}</span>{desc}</span>'
+            f'<span class="exp-main"><span class="exp-cat">{html.escape(d["category"])}</span>{desc}{tag}</span>'
             f'<span class="exp-amt">{ui.money_html(d["amount"])}</span>'
             f"</div>",
             unsafe_allow_html=True,
@@ -332,11 +412,13 @@ def historico_receitas(receitas: list[dict]) -> None:
         row, btn = st.columns([10, 1], vertical_alignment="center")
         desc = (f'<span class="exp-desc"> — {html.escape(r["description"])}</span>'
                 if r["description"] else "")
+        tag = (f'<span class="card-tag">{r["card_icon"]} {html.escape(r["card"])}</span>'
+               if r.get("card") else "")
         row.markdown(
             f'<div class="exp-row">'
             f'<span class="exp-date">{r["received_on"].strftime("%d/%m/%Y")}</span>'
             f'<span class="exp-chip" style="background:#0F7B6622">💶</span>'
-            f'<span class="exp-main"><span class="exp-cat">{html.escape(r["source"])}</span>{desc}</span>'
+            f'<span class="exp-main"><span class="exp-cat">{html.escape(r["source"])}</span>{desc}{tag}</span>'
             f'<span class="exp-amt">{ui.money_html(r["amount"])}</span>'
             f"</div>",
             unsafe_allow_html=True,

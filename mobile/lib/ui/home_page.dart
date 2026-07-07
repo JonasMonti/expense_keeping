@@ -11,6 +11,7 @@ import '../voice/voice_intake.dart';
 import '../voice/voice_listener.dart';
 import 'add_expense_sheet.dart';
 import 'add_income_sheet.dart';
+import 'cards_page.dart';
 import 'categories_page.dart';
 import 'format.dart';
 import 'settings_page.dart';
@@ -37,6 +38,8 @@ class _DashboardData {
   final List<SourceTotal> bySource;
   final List<MonthTotal> yearIncomeRows;
   final DateTime? since;
+  // Saldos por cartão (carteiras).
+  final List<CardBalance> cardBalances;
   const _DashboardData({
     required this.total,
     required this.byCat,
@@ -49,6 +52,7 @@ class _DashboardData {
     required this.bySource,
     required this.yearIncomeRows,
     required this.since,
+    required this.cardBalances,
   });
 }
 
@@ -135,6 +139,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final bySource = await _repo.incomesBySource(_year, _month);
     final yearIncomeRows = await _repo.monthlyIncomeForYear(_year);
     final (_, since) = await _repo.getOpeningBalance();
+    // Só cartões com algum movimento/saldo (esconde carteiras vazias).
+    final cardBalances = (await _repo.cardBalances())
+        .where((c) => c.opening != 0 || c.incomes != 0 || c.expenses != 0)
+        .toList();
 
     return _DashboardData(
       total: total,
@@ -148,6 +156,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       bySource: bySource,
       yearIncomeRows: yearIncomeRows,
       since: since,
+      cardBalances: cardBalances,
     );
   }
 
@@ -213,6 +222,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Future<void> _openCategories() async {
     final changed = await Navigator.of(context).push<bool>(
       MaterialPageRoute(builder: (_) => CategoriesPage(repo: _repo)),
+    );
+    if (changed == true) _refresh();
+  }
+
+  Future<void> _openCards() async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => CardsPage(repo: _repo)),
     );
     if (changed == true) _refresh();
   }
@@ -370,6 +386,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       BalanceCard(amount: d.balance, sub: balanceSub),
       const SizedBox(height: 14),
       KpiRow(income: d.incomeTotal, expense: d.total),
+      if (d.cardBalances.isNotEmpty) ...[
+        const SizedBox(height: 22),
+        const SectionTitle('Saldo por cartão'),
+        CardBalancesSection(d.cardBalances),
+      ],
       if (hasYear) ...[
         const SizedBox(height: 22),
         SectionTitle('Receitas e despesas em $_year'),
@@ -557,6 +578,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           icon: const Text('🏷️', style: TextStyle(fontSize: 18)),
           onPressed: _openCategories,
           tooltip: 'Gerir categorias',
+        ),
+        IconButton(
+          icon: const Text('💳', style: TextStyle(fontSize: 18)),
+          onPressed: _openCards,
+          tooltip: 'Gerir cartões',
         ),
         IconButton(
           icon: const Text('⚙️', style: TextStyle(fontSize: 18)),

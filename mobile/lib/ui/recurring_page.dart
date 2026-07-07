@@ -4,7 +4,7 @@
 /// materialização acontece no arranque da app (ver Repository.generateDueRecurring).
 library;
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Card;
 import 'package:flutter/services.dart';
 
 import '../data/repository.dart';
@@ -24,6 +24,7 @@ class RecurringPage extends StatefulWidget {
 class _RecurringPageState extends State<RecurringPage> {
   List<RecurringView> _rules = [];
   List<Category> _cats = [];
+  List<Card> _cards = [];
   bool _changed = false;
 
   @override
@@ -35,10 +36,12 @@ class _RecurringPageState extends State<RecurringPage> {
   Future<void> _load() async {
     final rules = await widget.repo.listRecurring();
     final cats = await widget.repo.listCategories();
+    final cards = await widget.repo.listCards();
     if (mounted) {
       setState(() {
         _rules = rules;
         _cats = cats;
+        _cards = cards;
       });
     }
   }
@@ -198,8 +201,11 @@ class _RecurringPageState extends State<RecurringPage> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
-      builder: (_) =>
-          _RecurringEditor(repo: widget.repo, categories: _cats, existing: existing),
+      builder: (_) => _RecurringEditor(
+          repo: widget.repo,
+          categories: _cats,
+          cards: _cards,
+          existing: existing),
     );
     if (saved == true) {
       _changed = true;
@@ -211,10 +217,12 @@ class _RecurringPageState extends State<RecurringPage> {
 class _RecurringEditor extends StatefulWidget {
   final Repository repo;
   final List<Category> categories;
+  final List<Card> cards;
   final RecurringView? existing;
   const _RecurringEditor({
     required this.repo,
     required this.categories,
+    required this.cards,
     this.existing,
   });
 
@@ -226,6 +234,7 @@ class _RecurringEditorState extends State<_RecurringEditor> {
   late final TextEditingController _amountCtrl;
   late final TextEditingController _descCtrl;
   late Category _category;
+  int? _cardId;
   late int _day;
   late bool _active;
   String? _error;
@@ -247,6 +256,8 @@ class _RecurringEditorState extends State<_RecurringEditor> {
         ? widget.categories.first
         : widget.categories.firstWhere((c) => c.id == wantedId,
             orElse: () => widget.categories.first);
+    final wantedCard = e?.cardId;
+    _cardId = widget.cards.any((c) => c.id == wantedCard) ? wantedCard : null;
   }
 
   @override
@@ -270,6 +281,7 @@ class _RecurringEditorState extends State<_RecurringEditor> {
       categoryId: _category.id!,
       dayOfMonth: _day,
       active: _active,
+      cardId: _cardId,
     );
     if (_isEditing) {
       await widget.repo.updateRecurring(rule);
@@ -327,6 +339,20 @@ class _RecurringEditorState extends State<_RecurringEditor> {
             ],
             onChanged: (c) => setState(() => _category = c!),
           ),
+          if (widget.cards.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            DropdownButtonFormField<int?>(
+              initialValue: _cardId,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Cartão'),
+              items: [
+                const DropdownMenuItem(value: null, child: Text('— Sem cartão —')),
+                for (final c in widget.cards)
+                  DropdownMenuItem(value: c.id, child: Text('${c.icon} ${c.name}')),
+              ],
+              onChanged: (v) => setState(() => _cardId = v),
+            ),
+          ],
           const SizedBox(height: 14),
           DropdownButtonFormField<int>(
             initialValue: _day,
