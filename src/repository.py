@@ -8,7 +8,7 @@ from decimal import Decimal
 from sqlalchemy import delete, extract, func, select
 
 from .database import SessionLocal
-from .models import AppSetting, Category, Expense, Income, RecurringIncome
+from .models import AppSetting, Card, Category, Expense, Income, RecurringIncome
 
 
 # --------------------------------------------------------------------------- #
@@ -48,10 +48,110 @@ def category_has_expenses(cat_id: int) -> bool:
 
 
 # --------------------------------------------------------------------------- #
+# Cartões
+# --------------------------------------------------------------------------- #
+def list_cards() -> list[Card]:
+    with SessionLocal() as s:
+        return list(s.scalars(select(Card).order_by(Card.name)))
+
+
+def add_card(
+    name: str, color: str = "#0F7B66", icon: str = "💳", opening_balance: float = 0.0
+) -> None:
+    with SessionLocal() as s:
+        s.add(
+            Card(
+                name=name.strip(),
+                color=color,
+                icon=icon,
+                opening_balance=Decimal(str(opening_balance)),
+            )
+        )
+        s.commit()
+
+
+def update_card(
+    card_id: int, name: str, color: str, icon: str, opening_balance: float
+) -> None:
+    with SessionLocal() as s:
+        card = s.get(Card, card_id)
+        if card:
+            card.name = name.strip()
+            card.color = color
+            card.icon = icon
+            card.opening_balance = Decimal(str(opening_balance))
+            s.commit()
+
+
+def delete_card(card_id: int) -> None:
+    with SessionLocal() as s:
+        s.execute(delete(Card).where(Card.id == card_id))
+        s.commit()
+
+
+def card_has_movements(card_id: int) -> bool:
+    """True se o cartão tem despesas ou receitas associadas."""
+    with SessionLocal() as s:
+        exp = s.scalar(
+            select(func.count(Expense.id)).where(Expense.card_id == card_id)
+        )
+        inc = s.scalar(
+            select(func.count(Income.id)).where(Income.card_id == card_id)
+        )
+        return bool(exp or inc)
+
+
+def card_balances(now: dt.date | None = None) -> list[dict]:
+    """Saldo atual de cada cartão (ordenado por nome).
+
+    Saldo = saldo inicial + receitas atribuídas − despesas atribuídas, contando
+    apenas movimentos até hoje (itens futuros não contam, igual ao saldo global)."""
+    today = now or dt.date.today()
+    with SessionLocal() as s:
+        cards = list(s.scalars(select(Card).order_by(Card.name)))
+        inc_rows = dict(
+            s.execute(
+                select(Income.card_id, func.coalesce(func.sum(Income.amount), 0))
+                .where(Income.card_id.is_not(None), Income.received_on <= today)
+                .group_by(Income.card_id)
+            ).all()
+        )
+        exp_rows = dict(
+            s.execute(
+                select(Expense.card_id, func.coalesce(func.sum(Expense.amount), 0))
+                .where(Expense.card_id.is_not(None), Expense.spent_on <= today)
+                .group_by(Expense.card_id)
+            ).all()
+        )
+    result = []
+    for c in cards:
+        incomes = float(inc_rows.get(c.id, 0) or 0)
+        expenses = float(exp_rows.get(c.id, 0) or 0)
+        opening = float(c.opening_balance)
+        result.append(
+            {
+                "id": c.id,
+                "name": c.name,
+                "color": c.color,
+                "icon": c.icon,
+                "opening": opening,
+                "incomes": incomes,
+                "expenses": expenses,
+                "balance": opening + incomes - expenses,
+            }
+        )
+    return result
+
+
+# --------------------------------------------------------------------------- #
 # Despesas
 # --------------------------------------------------------------------------- #
 def add_expense(
-    amount: Decimal, category_id: int, spent_on: dt.date, description: str = ""
+    amount: Decimal,
+    category_id: int,
+    spent_on: dt.date,
+    description: str = "",
+    card_id: int | None = None,
 ) -> None:
     with SessionLocal() as s:
         s.add(
@@ -60,6 +160,7 @@ def add_expense(
                 category_id=category_id,
                 spent_on=spent_on,
                 description=description.strip(),
+                card_id=card_id,
             )
         )
         s.commit()
@@ -75,8 +176,9 @@ def list_expenses(year: int, month: int) -> list[dict]:
     """Devolve as despesas de um mês como dicionários (já desligados da sessão)."""
     with SessionLocal() as s:
         rows = s.execute(
-            select(Expense, Category)
+            select(Expense, Category, Card)
             .join(Category, Expense.category_id == Category.id)
+            .outerjoin(Card, Expense.card_id == Card.id)
             .where(
                 extract("year", Expense.spent_on) == year,
                 extract("month", Expense.spent_on) == month,
@@ -92,8 +194,11 @@ def list_expenses(year: int, month: int) -> list[dict]:
             "category": c.name,
             "color": c.color,
             "icon": c.icon,
+            "card_id": e.card_id,
+            "card": card.name if card else None,
+            "card_icon": card.icon if card else None,
         }
-        for e, c in rows
+        for e, c, card in rows
     ]
 
 
@@ -197,7 +302,11 @@ def available_years() -> list[int]:
 # Receitas
 # --------------------------------------------------------------------------- #
 def add_income(
-    amount: Decimal, source: str, received_on: dt.date, description: str = ""
+    amount: Decimal,
+    source: str,
+    received_on: dt.date,
+    description: str = "",
+    card_id: int | None = None,
 ) -> None:
     with SessionLocal() as s:
         s.add(
@@ -206,13 +315,19 @@ def add_income(
                 source=source.strip() or "Outros",
                 received_on=received_on,
                 description=description.strip(),
+                card_id=card_id,
             )
         )
         s.commit()
 
 
 def update_income(
-    income_id: int, amount: Decimal, source: str, received_on: dt.date, description: str = ""
+    income_id: int,
+    amount: Decimal,
+    source: str,
+    received_on: dt.date,
+    description: str = "",
+    card_id: int | None = None,
 ) -> None:
     with SessionLocal() as s:
         inc = s.get(Income, income_id)
@@ -221,6 +336,7 @@ def update_income(
             inc.source = source.strip() or "Outros"
             inc.received_on = received_on
             inc.description = description.strip()
+            inc.card_id = card_id
             s.commit()
 
 
@@ -233,8 +349,9 @@ def delete_income(income_id: int) -> None:
 def list_incomes(year: int, month: int) -> list[dict]:
     """Devolve as receitas de um mês como dicionários (desligados da sessão)."""
     with SessionLocal() as s:
-        rows = s.scalars(
-            select(Income)
+        rows = s.execute(
+            select(Income, Card)
+            .outerjoin(Card, Income.card_id == Card.id)
             .where(
                 extract("year", Income.received_on) == year,
                 extract("month", Income.received_on) == month,
@@ -248,8 +365,11 @@ def list_incomes(year: int, month: int) -> list[dict]:
             "amount": float(i.amount),
             "source": i.source,
             "description": i.description,
+            "card_id": i.card_id,
+            "card": card.name if card else None,
+            "card_icon": card.icon if card else None,
         }
-        for i in rows
+        for i, card in rows
     ]
 
 
@@ -313,6 +433,7 @@ def list_recurring_incomes() -> list[dict]:
             "description": r.description,
             "day_of_month": r.day_of_month,
             "active": r.active,
+            "card_id": r.card_id,
         }
         for r in rows
     ]
@@ -324,6 +445,7 @@ def add_recurring_income(
     day_of_month: int,
     description: str = "",
     active: bool = True,
+    card_id: int | None = None,
     now: dt.date | None = None,
 ) -> None:
     """Cria uma regra. `last_generated` arranca no mês anterior ao atual, para que a
@@ -338,6 +460,7 @@ def add_recurring_income(
                 description=description.strip(),
                 day_of_month=day_of_month,
                 active=active,
+                card_id=card_id,
                 last_generated=prev,
             )
         )
@@ -351,6 +474,7 @@ def update_recurring_income(
     day_of_month: int,
     description: str,
     active: bool,
+    card_id: int | None = None,
 ) -> None:
     with SessionLocal() as s:
         r = s.get(RecurringIncome, rule_id)
@@ -360,6 +484,7 @@ def update_recurring_income(
             r.day_of_month = day_of_month
             r.description = description.strip()
             r.active = active
+            r.card_id = card_id
             s.commit()
 
 
@@ -401,6 +526,7 @@ def generate_due_recurring_incomes(now: dt.date | None = None) -> int:
                         source=r.source,
                         description=r.description,
                         received_on=dt.date(cy, cm, dd),
+                        card_id=r.card_id,
                     )
                 )
                 created += 1

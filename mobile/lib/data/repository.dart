@@ -66,6 +66,89 @@ class Repository {
   }
 
   // ------------------------------------------------------------------ //
+  // Cartões
+  // ------------------------------------------------------------------ //
+  Future<List<Card>> listCards() async {
+    final d = await _db;
+    final rows = await d.query('cards', orderBy: 'name');
+    return rows.map(Card.fromMap).toList();
+  }
+
+  Future<int> addCard(Card c) async {
+    final d = await _db;
+    return d.insert('cards', {
+      'name': c.name.trim(),
+      'color': c.color,
+      'icon': c.icon,
+      'opening_balance': c.openingBalance,
+    });
+  }
+
+  Future<void> updateCard(Card c) async {
+    final d = await _db;
+    await d.update(
+      'cards',
+      {
+        'name': c.name.trim(),
+        'color': c.color,
+        'icon': c.icon,
+        'opening_balance': c.openingBalance,
+      },
+      where: 'id = ?',
+      whereArgs: [c.id],
+    );
+  }
+
+  Future<void> deleteCard(int id) async {
+    final d = await _db;
+    await d.delete('cards', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<bool> cardHasMovements(int id) async {
+    final d = await _db;
+    final exp = Sqflite.firstIntValue(await d.rawQuery(
+        'SELECT COUNT(*) FROM expenses WHERE card_id = ?', [id]));
+    final inc = Sqflite.firstIntValue(await d.rawQuery(
+        'SELECT COUNT(*) FROM incomes WHERE card_id = ?', [id]));
+    return (exp ?? 0) > 0 || (inc ?? 0) > 0;
+  }
+
+  /// Saldo atual de cada cartão. Saldo = saldo inicial + receitas atribuídas −
+  /// despesas atribuídas, contando apenas movimentos até hoje (itens futuros não
+  /// contam, igual ao saldo global). Usa cêntimos inteiros para evitar erros de
+  /// vírgula flutuante, como [currentBalance].
+  Future<List<CardBalance>> cardBalances({DateTime? now}) async {
+    final d = await _db;
+    final today = _isoDate(_dateOnly(now ?? DateTime.now()));
+    final cards = await listCards();
+
+    final incRows = await d.rawQuery('''
+      SELECT card_id, CAST(ROUND(COALESCE(SUM(amount),0)*100) AS INTEGER) AS c
+      FROM incomes WHERE card_id IS NOT NULL AND received_on <= ?
+      GROUP BY card_id
+    ''', [today]);
+    final expRows = await d.rawQuery('''
+      SELECT card_id, CAST(ROUND(COALESCE(SUM(amount),0)*100) AS INTEGER) AS c
+      FROM expenses WHERE card_id IS NOT NULL AND spent_on <= ?
+      GROUP BY card_id
+    ''', [today]);
+    final inc = {for (final r in incRows) r['card_id'] as int: r['c'] as int};
+    final exp = {for (final r in expRows) r['card_id'] as int: r['c'] as int};
+
+    return cards
+        .map((c) => CardBalance(
+              id: c.id!,
+              name: c.name,
+              color: c.color,
+              icon: c.icon,
+              opening: c.openingBalance,
+              incomes: (inc[c.id] ?? 0) / 100.0,
+              expenses: (exp[c.id] ?? 0) / 100.0,
+            ))
+        .toList();
+  }
+
+  // ------------------------------------------------------------------ //
   // Despesas
   // ------------------------------------------------------------------ //
   /// Insere a despesa e devolve o id gerado (útil para "Anular").
@@ -84,6 +167,7 @@ class Repository {
         'description': e.description,
         'spent_on': e.toMap()['spent_on'],
         'category_id': e.categoryId,
+        'card_id': e.cardId,
       },
       where: 'id = ?',
       whereArgs: [e.id],
@@ -101,9 +185,11 @@ class Repository {
     final d = await _db;
     final rows = await d.rawQuery('''
       SELECT e.id, e.spent_on, e.amount, e.description, e.category_id,
-             c.name AS category, c.color, c.icon
+             c.name AS category, c.color, c.icon,
+             e.card_id, ca.name AS card_name, ca.icon AS card_icon
       FROM expenses e
       JOIN categories c ON c.id = e.category_id
+      LEFT JOIN cards ca ON ca.id = e.card_id
       ORDER BY e.created_at DESC, e.id DESC
       LIMIT 1
     ''');
@@ -115,9 +201,11 @@ class Repository {
     final d = await _db;
     final rows = await d.rawQuery('''
       SELECT e.id, e.spent_on, e.amount, e.description, e.category_id,
-             c.name AS category, c.color, c.icon
+             c.name AS category, c.color, c.icon,
+             e.card_id, ca.name AS card_name, ca.icon AS card_icon
       FROM expenses e
       JOIN categories c ON c.id = e.category_id
+      LEFT JOIN cards ca ON ca.id = e.card_id
       WHERE strftime('%Y', e.spent_on) = ? AND strftime('%m', e.spent_on) = ?
       ORDER BY e.spent_on DESC, e.id DESC
     ''', [_y(year), _m(month)]);
@@ -131,7 +219,7 @@ class Repository {
     final d = await _db;
     final rows = await d.rawQuery('''
       SELECT r.id, r.amount, r.description, r.category_id, r.day_of_month,
-             r.active, c.name AS category, c.color, c.icon
+             r.active, r.card_id, c.name AS category, c.color, c.icon
       FROM recurring r
       JOIN categories c ON c.id = r.category_id
       ORDER BY r.day_of_month, r.id
@@ -151,6 +239,7 @@ class Repository {
       'category_id': r.categoryId,
       'day_of_month': r.dayOfMonth,
       'active': r.active ? 1 : 0,
+      'card_id': r.cardId,
       'last_generated': _ym(prev),
     });
   }
@@ -165,6 +254,7 @@ class Repository {
         'category_id': r.categoryId,
         'day_of_month': r.dayOfMonth,
         'active': r.active ? 1 : 0,
+        'card_id': r.cardId,
       },
       where: 'id = ?',
       whereArgs: [r.id],
@@ -195,6 +285,7 @@ class Repository {
       final amount = (r['amount'] as num).toDouble();
       final desc = (r['description'] as String?) ?? '';
       final catId = r['category_id'] as int;
+      final cardId = r['card_id'] as int?;
       final day = r['day_of_month'] as int;
       final lastGen = r['last_generated'] as String?;
 
@@ -213,6 +304,7 @@ class Repository {
           'description': desc,
           'spent_on': _isoDate(DateTime(cy, cm, dd)),
           'category_id': catId,
+          'card_id': cardId,
         });
         created++;
         newLast = _ymOf(cy, cm);
@@ -342,6 +434,7 @@ class Repository {
         'source': i.source,
         'description': i.description,
         'received_on': i.toMap()['received_on'],
+        'card_id': i.cardId,
       },
       where: 'id = ?',
       whereArgs: [i.id],
@@ -356,10 +449,12 @@ class Repository {
   Future<List<IncomeView>> listIncomes(int year, int month) async {
     final d = await _db;
     final rows = await d.rawQuery('''
-      SELECT id, received_on, amount, source, description
-      FROM incomes
-      WHERE strftime('%Y', received_on) = ? AND strftime('%m', received_on) = ?
-      ORDER BY received_on DESC, id DESC
+      SELECT i.id, i.received_on, i.amount, i.source, i.description,
+             i.card_id, ca.name AS card_name, ca.icon AS card_icon
+      FROM incomes i
+      LEFT JOIN cards ca ON ca.id = i.card_id
+      WHERE strftime('%Y', i.received_on) = ? AND strftime('%m', i.received_on) = ?
+      ORDER BY i.received_on DESC, i.id DESC
     ''', [_y(year), _m(month)]);
     return rows.map(IncomeView.fromMap).toList();
   }
@@ -428,6 +523,7 @@ class Repository {
       'description': r.description.trim(),
       'day_of_month': r.dayOfMonth,
       'active': r.active ? 1 : 0,
+      'card_id': r.cardId,
       'last_generated': _ym(prev),
     });
   }
@@ -442,6 +538,7 @@ class Repository {
         'description': r.description.trim(),
         'day_of_month': r.dayOfMonth,
         'active': r.active ? 1 : 0,
+        'card_id': r.cardId,
       },
       where: 'id = ?',
       whereArgs: [r.id],
@@ -469,6 +566,7 @@ class Repository {
       final amount = (r['amount'] as num).toDouble();
       final source = (r['source'] as String?) ?? 'Outros';
       final desc = (r['description'] as String?) ?? '';
+      final cardId = r['card_id'] as int?;
       final day = r['day_of_month'] as int;
       final lastGen = r['last_generated'] as String?;
 
@@ -487,6 +585,7 @@ class Repository {
           'source': source,
           'description': desc,
           'received_on': _isoDate(DateTime(cy, cm, dd)),
+          'card_id': cardId,
         });
         created++;
         newLast = _ymOf(cy, cm);

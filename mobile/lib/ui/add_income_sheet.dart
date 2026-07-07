@@ -2,7 +2,7 @@
 /// e [showAddExpenseSheet], mas com `source` (origem) em vez de categoria.
 library;
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Card;
 import 'package:flutter/services.dart';
 
 import '../data/repository.dart';
@@ -26,6 +26,8 @@ Future<bool> showAddIncomeSheet(
   Repository repo, {
   IncomeView? editing,
 }) async {
+  final cards = await repo.listCards();
+  if (!context.mounted) return false;
   final result = await showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
@@ -33,15 +35,16 @@ Future<bool> showAddIncomeSheet(
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
     ),
-    builder: (_) => _AddIncomeForm(repo: repo, editing: editing),
+    builder: (_) => _AddIncomeForm(repo: repo, cards: cards, editing: editing),
   );
   return result ?? false;
 }
 
 class _AddIncomeForm extends StatefulWidget {
   final Repository repo;
+  final List<Card> cards;
   final IncomeView? editing;
-  const _AddIncomeForm({required this.repo, this.editing});
+  const _AddIncomeForm({required this.repo, required this.cards, this.editing});
 
   @override
   State<_AddIncomeForm> createState() => _AddIncomeFormState();
@@ -51,6 +54,7 @@ class _AddIncomeFormState extends State<_AddIncomeForm> {
   late final TextEditingController _amountCtrl;
   late final TextEditingController _descCtrl;
   late String _source;
+  int? _cardId;
   DateTime _date = _today();
   bool _repeatMonthly = false;
   String? _error;
@@ -68,6 +72,8 @@ class _AddIncomeFormState extends State<_AddIncomeForm> {
     // Mantém a origem em edição mesmo que não esteja na lista de sugestões.
     final wanted = ed?.source ?? kIncomeSources.first;
     _source = kIncomeSources.contains(wanted) ? wanted : kIncomeSources.first;
+    final wantedCard = ed?.cardId;
+    _cardId = widget.cards.any((c) => c.id == wantedCard) ? wantedCard : null;
     final initialDate = ed?.receivedOn;
     if (initialDate != null) {
       _date = DateTime(initialDate.year, initialDate.month, initialDate.day);
@@ -104,6 +110,7 @@ class _AddIncomeFormState extends State<_AddIncomeForm> {
       source: _source,
       receivedOn: _date,
       description: _descCtrl.text.trim(),
+      cardId: _cardId,
     );
     if (_isEditing) {
       await widget.repo.updateIncome(i);
@@ -117,6 +124,7 @@ class _AddIncomeFormState extends State<_AddIncomeForm> {
           source: _source,
           description: i.description,
           dayOfMonth: _date.day,
+          cardId: _cardId,
         ));
       }
     }
@@ -188,6 +196,20 @@ class _AddIncomeFormState extends State<_AddIncomeForm> {
             ],
             onChanged: (s) => setState(() => _source = s!),
           ),
+          if (widget.cards.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            DropdownButtonFormField<int?>(
+              initialValue: _cardId,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Carregar cartão'),
+              items: [
+                const DropdownMenuItem(value: null, child: Text('— Sem cartão —')),
+                for (final c in widget.cards)
+                  DropdownMenuItem(value: c.id, child: Text('${c.icon} ${c.name}')),
+              ],
+              onChanged: (v) => setState(() => _cardId = v),
+            ),
+          ],
           const SizedBox(height: 14),
           InkWell(
             onTap: _pickDate,

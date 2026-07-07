@@ -13,6 +13,8 @@ local no dispositivo** (funciona totalmente offline, single-user).
 - Donut por categoria/origem + lista com barras; linha anual receitas vs despesas
 - Linha de evolução anual (Jan→Dez), com o mês selecionado destacado
 - Gerir categorias (nome, emoji, cor) — 8 categorias criadas por defeito
+- Cartões (carteiras): associa cada despesa/receita a um cartão e vê o saldo de cada um
+  (subsídio de alimentação, débito, cartão jovem, dinheiro…) — 4 cartões por defeito, geríveis
 - Definições: saldo inicial e receitas recorrentes
 - Seletor de mês/ano
 - Tudo em português (pt-PT), valores em formato `1 234,56 €`

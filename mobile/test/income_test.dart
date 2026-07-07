@@ -141,10 +141,14 @@ void main() {
     });
   });
 
-  test('migração v2→v3 cria as tabelas de receita preservando dados', () async {
+  test('migração v2→atual cria as tabelas de receita preservando dados',
+      () async {
     final dir = Directory.systemTemp.createTempSync('despesas_mig_inc');
     final path = '${dir.path}/m.db';
-    // Abre na versão 2 (sem tabelas de receita) com uma despesa.
+    // Abre na versão 2 (sem tabelas de receita) com uma despesa. Um v2 real já
+    // tem a tabela `recurring` (criada na migração v1→v2), por isso o esquema
+    // sintético inclui-a — senão os ALTER da migração para a versão atual
+    // (que adiciona card_id a recurring) não teriam onde correr.
     final v2 = await databaseFactoryFfi.openDatabase(
       path,
       options: OpenDatabaseOptions(
@@ -155,6 +159,8 @@ void main() {
               'CREATE TABLE categories (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, color TEXT, icon TEXT)');
           await d.execute(
               "CREATE TABLE expenses (id INTEGER PRIMARY KEY AUTOINCREMENT, amount REAL NOT NULL, description TEXT NOT NULL DEFAULT '', spent_on TEXT NOT NULL, category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE, created_at TEXT NOT NULL DEFAULT (datetime('now')))");
+          await d.execute(
+              "CREATE TABLE recurring (id INTEGER PRIMARY KEY AUTOINCREMENT, amount REAL NOT NULL, description TEXT NOT NULL DEFAULT '', category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE, day_of_month INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1, last_generated TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')))");
           await d.insert('categories', {'name': 'Casa', 'color': '#6BCB77', 'icon': '🏠'});
           await d.insert('expenses', {
             'amount': 7.5,
@@ -166,17 +172,17 @@ void main() {
     );
     await v2.close();
 
-    // Reabre na versão 3 → corre a migração.
-    final v3 = await databaseFactoryFfi.openDatabase(
+    // Reabre na versão atual da app → corre a migração completa.
+    final vNow = await databaseFactoryFfi.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 3,
+        version: 4,
         onConfigure: (d) => d.execute('PRAGMA foreign_keys = ON'),
         onCreate: AppDatabase.createSchema,
         onUpgrade: AppDatabase.upgradeSchema,
       ),
     );
-    final migRepo = Repository(() async => v3);
+    final migRepo = Repository(() async => vNow);
 
     // A despesa antiga foi preservada…
     expect((await migRepo.listExpenses(2026, 6)).length, 1);
@@ -187,7 +193,7 @@ void main() {
     await migRepo.setOpeningBalance(100, DateTime(2026, 6, 1));
     expect(await migRepo.currentBalance(now: DateTime(2026, 6, 28)),
         closeTo(1592.5, 0.001)); // 100 + 1500 − 7,5 (despesa antiga, 03/06)
-    await v3.close();
+    await vNow.close();
     dir.deleteSync(recursive: true);
   });
 }

@@ -1,7 +1,7 @@
 /// Bottom sheet para registar uma despesa — espelha dialog_add_expense() (app.py).
 library;
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Card;
 import 'package:flutter/services.dart';
 
 import '../data/repository.dart';
@@ -27,6 +27,7 @@ Future<bool> showAddExpenseSheet(
   ExpenseView? editing,
 }) async {
   final cats = await repo.listCategories();
+  final cards = await repo.listCards();
   if (!context.mounted) return false;
   if (cats.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -43,6 +44,7 @@ Future<bool> showAddExpenseSheet(
     builder: (_) => _AddExpenseForm(
       repo: repo,
       categories: cats,
+      cards: cards,
       initialAmount: initialAmount,
       initialCategory: initialCategory,
       initialDescription: initialDescription,
@@ -56,6 +58,7 @@ Future<bool> showAddExpenseSheet(
 class _AddExpenseForm extends StatefulWidget {
   final Repository repo;
   final List<Category> categories;
+  final List<Card> cards;
   final double? initialAmount;
   final Category? initialCategory;
   final String? initialDescription;
@@ -64,6 +67,7 @@ class _AddExpenseForm extends StatefulWidget {
   const _AddExpenseForm({
     required this.repo,
     required this.categories,
+    required this.cards,
     this.initialAmount,
     this.initialCategory,
     this.initialDescription,
@@ -79,6 +83,7 @@ class _AddExpenseFormState extends State<_AddExpenseForm> {
   late final TextEditingController _amountCtrl;
   late final TextEditingController _descCtrl;
   late Category _category;
+  int? _cardId;
   DateTime _date = _today();
   bool _repeatMonthly = false;
   String? _error;
@@ -110,6 +115,9 @@ class _AddExpenseFormState extends State<_AddExpenseForm> {
             (c) => c.id == wantedId,
             orElse: () => widget.categories.first,
           );
+    // Cartão só existe se estiver na lista atual (evita valor órfão no dropdown).
+    final wantedCard = ed?.cardId;
+    _cardId = widget.cards.any((c) => c.id == wantedCard) ? wantedCard : null;
   }
 
   static DateTime _today() {
@@ -141,6 +149,7 @@ class _AddExpenseFormState extends State<_AddExpenseForm> {
       categoryId: _category.id!,
       spentOn: _date,
       description: _descCtrl.text.trim(),
+      cardId: _cardId,
     );
     if (_isEditing) {
       await widget.repo.updateExpense(e);
@@ -154,6 +163,7 @@ class _AddExpenseFormState extends State<_AddExpenseForm> {
           description: e.description,
           categoryId: e.categoryId,
           dayOfMonth: _date.day,
+          cardId: _cardId,
         ));
       }
     }
@@ -262,6 +272,20 @@ class _AddExpenseFormState extends State<_AddExpenseForm> {
             ],
             onChanged: (c) => setState(() => _category = c!),
           ),
+          if (widget.cards.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            DropdownButtonFormField<int?>(
+              initialValue: _cardId,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Cartão'),
+              items: [
+                const DropdownMenuItem(value: null, child: Text('— Sem cartão —')),
+                for (final c in widget.cards)
+                  DropdownMenuItem(value: c.id, child: Text('${c.icon} ${c.name}')),
+              ],
+              onChanged: (v) => setState(() => _cardId = v),
+            ),
+          ],
           const SizedBox(height: 14),
           InkWell(
             onTap: _pickDate,
